@@ -36,11 +36,6 @@ onMounted(load)
           <p class="text-xl font-medium">Welcome to Teacher Hub</p>
           <p class="text-muted">Generate and manage your courses. Use the Create Course button in the top bar when you're ready.</p>
         </div>
-        <div class="flex items-center gap-2">
-          <NuxtLink to="/app/courses/list">
-            <UButton color="primary" icon="i-lucide-sparkles">Create Course</UButton>
-          </NuxtLink>
-        </div>
       </div>
     </UCard>
 

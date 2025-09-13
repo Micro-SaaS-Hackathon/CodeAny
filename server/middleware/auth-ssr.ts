@@ -12,10 +12,16 @@ export default defineEventHandler(async (event) => {
   // Do not SSR-redirect /app/**; these routes are client-rendered
   if (pathname.startsWith('/app')) return
 
-  const user = await serverSupabaseUser(event)
-
-  // Send authenticated users away from public entry points
-  if (user && (pathname === '/' || pathname === '/auth' || pathname === '/confirm')) {
-    return sendRedirect(event, '/app/dashboard')
+  // For specific public entry points, check auth to optionally redirect
+  if (pathname === '/' || pathname === '/auth' || pathname === '/confirm') {
+    let user: any = null
+    try {
+      user = await serverSupabaseUser(event)
+    } catch (_err) {
+      user = null
+    }
+    if (user) {
+      return sendRedirect(event, '/app/dashboard')
+    }
   }
 })

@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute } from '#app'
-import { useToast, navigateTo, useSupabaseUser } from '#imports'
-import { useCourses } from '~/composables/useCourses'
+import { useSupabaseUser } from '#imports'
+import CreateCourseModal from '~/components/CreateCourseModal.vue'
 
-const { createCourse } = useCourses()
 const q = ref('')
-const toast = useToast()
 const user = useSupabaseUser()
 const avatarName = computed(() => (user.value?.user_metadata as any)?.name || user.value?.email || 'User')
 const avatarSrc = computed(() => (user.value?.user_metadata as any)?.avatar_url || (user.value?.user_metadata as any)?.picture || null)
@@ -19,16 +17,8 @@ const route = useRoute()
 const isDashboard = computed(() => route.path.startsWith('/app/dashboard'))
 const isCourses = computed(() => route.path.startsWith('/app/courses'))
 
-async function onCreateCourse() {
-  try {
-    const course = await createCourse()
-    toast.add({ title: 'Course created', description: `“${course.title}” is ready.`, icon: 'i-lucide-check', color: 'success' })
-    // Navigate to courses list so user sees it
-    navigateTo('/app/courses/list')
-  } catch (e: any) {
-    toast.add({ title: 'Failed to create course', description: e?.message ?? String(e), color: 'error', icon: 'i-lucide-alert-triangle' })
-  }
-}
+// Local control for Create Course modal
+const showCreateCourse = ref(false)
 </script>
 
 <template>
@@ -44,7 +34,7 @@ async function onCreateCourse() {
           <UInput v-model="q" placeholder="Search…" icon="i-lucide-search" class="w-full max-w-xl" size="lg" />
         </div>
         <div class="flex items-center gap-3 shrink-0">
-          <UButton color="primary" icon="i-lucide-plus" label="Create Course" @click="onCreateCourse" />
+          <UButton color="primary" icon="i-lucide-plus" label="Create Course" @click="showCreateCourse = true" />
           <!-- Avoid SSR hydration differences by rendering avatar on client only -->
           <ClientOnly>
             <template #fallback>
@@ -95,6 +85,7 @@ async function onCreateCourse() {
         <slot />
       </main>
     </div>
+    <CreateCourseModal v-model="showCreateCourse" />
   </div>
   
 </template>
