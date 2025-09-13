@@ -59,8 +59,50 @@ Deployment (typical):
 
 ## Environment Variables
 
-- None required for the landing page.
-- If you add form submissions, analytics, etc., document variables here and never commit secrets.
+- None required for the static landing page.
+- For auth and user accounts, fill these in `.env` (copy from `sample.env`):
+
+```
+SUPABASE_PROJECT_URL="https://<your-project-ref>.supabase.co"
+SUPABASE_API_KEY="<your-supabase-anon-key>"
+
+# Optional if you implement your own Google OAuth (not required when using Supabase's Google provider)
+GOOGLE_OAUTH_ID=""
+GOOGLE_OAUTH_SECRET=""
+```
+
+Do not commit real secrets. `.env` is already gitignored.
+
+### Supabase Auth (Email + Google)
+
+This project integrates Supabase Auth using `@nuxtjs/supabase`:
+
+- Email sign up with confirmation link
+- Email sign in with password
+- Google sign-in via Supabase OAuth provider
+
+Routes:
+- `GET /auth` — UI for sign up/sign in (email + Google)
+- `GET /confirm` — Callback to exchange the auth `code` for a session
+
+Supabase module reads runtime config from `runtimeConfig.public.supabase` (wired to `SUPABASE_PROJECT_URL` and `SUPABASE_API_KEY`).
+
+#### Configure in Supabase Dashboard
+1. Auth > URL Configuration:
+   - Add Redirect URLs: `http://localhost:3010/confirm` (dev) and your production `https://your-domain/confirm`.
+2. Auth > Providers > Google:
+   - Click Enable and follow instructions to set the Google client ID/secret in the Supabase dashboard.
+   - You do NOT need `GOOGLE_OAUTH_ID`/`GOOGLE_OAUTH_SECRET` in this app when using Supabase-managed Google OAuth.
+
+#### Local Setup
+1. Copy vars: `cp sample.env .env` and fill values.
+2. Install deps and start:
+   ```bash
+   npm install
+   npm run dev
+   # http://localhost:3010
+   ```
+3. Visit `/auth` to sign up/sign in. After confirming email or Google OAuth, you will be redirected to `/confirm` and then to `/`.
 
 ## Deployment
 
@@ -69,6 +111,8 @@ Deployment (typical):
   - Netlify
   - Any static hosting (after build)
 - For SSR features, adjust `routeRules` in [nuxt.config.ts](CodeAny/nuxt.config.ts:0:0-0:0).
+
+Auth routes (`/auth`, `/confirm`) are excluded from prerender to enable dynamic auth flows.
 
 ## Troubleshooting
 
@@ -85,3 +129,9 @@ Deployment (typical):
 - Wire “Try Demo” to a live demo.
 - Add waitlist integration (modal/API).
 - Add analytics, cookie consent, and legal pages.
+- Add user dashboard for course creators (requires authenticated area).
+
+## Notes for the Hackathon
+
+- Supabase documentation is indexed for fast lookup via NIA MCP: https://supabase.com/docs
+- Ask the AI assistant for examples (e.g., `exchangeCodeForSession`, `signInWithOAuth`, `emailRedirectTo`) and it can pull code-level references quickly.

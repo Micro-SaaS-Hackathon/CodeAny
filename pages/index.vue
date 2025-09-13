@@ -70,6 +70,7 @@ const faqs = [
           <div class="flex items-center gap-2">
             <UButton label="Try Demo" color="primary" icon="i-lucide-rocket" @click="onTryDemo" aria-label="Try demo" />
             <UButton to="#teach-with-cursly" variant="outline" label="Join Students" aria-label="Join students" />
+            <UButton to="/auth" variant="link" color="neutral" label="Sign in" aria-label="Sign in" />
           </div>
         </div>
       </UContainer>
@@ -79,10 +80,9 @@ const faqs = [
     <section class="bg-hero border-b border-default">
       <UContainer class="py-14">
         <div class="max-w-3xl">
-          <h1 class="text-h1 mb-3 text-highlighted">Cursly — Build a complete course in minutes</h1>
+          <h1 class="text-h1 mb-3 text-highlighted">Cursly: Build a complete, AI-powered course, intelligently enriched with real-world data, in minutes.</h1>
           <p class="text-muted mb-6">
-            Cursly is a micro‑SaaS for teachers and course creators. Tell us your course type, topics, materials, quizzes/exams,
-            assignments, grading style, syllabus and video needs—our AI agent generates a ready‑to‑edit course in your personal hub.
+            Tell us what you want to teach—Cursly turns your ideas into ready‑to‑edit lessons, activities, and assessments. Start fast, keep full control.
           </p>
           <div class="flex flex-wrap items-center gap-3">
             <UButton
