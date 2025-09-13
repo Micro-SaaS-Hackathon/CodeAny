@@ -1,0 +1,66 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* Design tokens (Tailwind v4 CSS-first) */
+@theme {
+  /* Typography */
+  --font-sans: 'Inter', 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+}
+
+/* Brand and UI tokens per Nuxt UI CSS variables */
+:root {
+  /* Brand colors */
+  --ui-primary: #6C5CE7; /* indigo-violet */
+  --ui-secondary: #2FD180; /* mint accent */
+
+  /* Status */
+  --ui-success: #22C55E;
+  --ui-warning: #F59E0B;
+  --ui-error: #EF4444;
+
+  /* Text and backgrounds (light theme by default) */
+  --ui-text: #0F172A; /* slate-900 */
+  --ui-text-highlighted: #0B1220;
+  --ui-bg: #FFFFFF; /* light surface */
+  --ui-bg-muted: #F8FAFC; /* near-white */
+  --ui-bg-elevated: #FFFFFF;
+
+  /* Borders and elevation (keep it flat/clean) */
+  --ui-border: #E5E7EB; /* neutral-200 */
+  --ui-border-accented: #D1D5DB; /* neutral-300 */
+
+  /* Radius - keep to md */
+  --ui-radius: 0.375rem;
+
+  /* Container width tuning (optional) */
+  --ui-container: var(--container-7xl);
+}
+
+/* Dark mode reasonable defaults */
+.dark {
+  --ui-text: #E5E7EB; /* slate-200 */
+  --ui-text-highlighted: #FFFFFF;
+  --ui-bg: #0B1220; /* near slate-950 */
+  --ui-bg-muted: #111827; /* slate-900 */
+  --ui-bg-elevated: #0F172A; /* slate-800 */
+  --ui-border: #1F2937; /* slate-800 */
+  --ui-border-accented: #334155; /* slate-700 */
+  /* Keep brand strong in dark mode */
+  --ui-primary: #7C6CF0;
+  --ui-secondary: #34D399;
+}
+
+/* Base font sizing according to spec */
+html { font-family: var(--font-sans); font-size: 14px; }
+
+/***** Headings scale *****/
+h1, .text-h1 { font-size: 28px; line-height: 1.25; font-weight: 700; }
+h2, .text-h2 { font-size: 22px; line-height: 1.35; font-weight: 600; }
+h3, .text-h3 { font-size: 18px; line-height: 1.4; font-weight: 600; }
+
+/***** Focus states for accessibility *****/
+:focus-visible { outline: 2px solid color-mix(in oklab, var(--ui-primary), white 20%); outline-offset: 2px; }
+
+/***** Small utility helpers *****/
+.bg-hero { background: linear-gradient(180deg, color-mix(in oklab, var(--ui-primary), white 95%), transparent 60%); }
+.badge-ghost { background-color: color-mix(in oklab, var(--ui-primary), transparent 90%); }
