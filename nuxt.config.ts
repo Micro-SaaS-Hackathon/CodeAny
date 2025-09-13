@@ -42,7 +42,9 @@ export default defineNuxtConfig({
         // Map your existing env names to what the module reads at runtime
         url: process.env.SUPABASE_PROJECT_URL,
         key: process.env.SUPABASE_API_KEY
-      }
+      },
+      // FastAPI backend base URL (used by composables)
+      backendUrl: process.env.BACKEND_URL || 'http://localhost:8000'
     }
   },
   typescript: {
@@ -52,6 +54,7 @@ export default defineNuxtConfig({
   routeRules: {
     '/auth': { prerender: false },
     '/confirm': { prerender: false },
+    '/app/**': { prerender: false },
     '/**': { prerender: true }
   },
   compatibilityDate: '2024-09-01'

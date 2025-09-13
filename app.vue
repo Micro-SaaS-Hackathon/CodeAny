@@ -4,6 +4,8 @@ const toaster = { position: 'top-right', duration: 3500, expand: true } as const
 
 <template>
   <UApp :toaster="toaster">
-    <NuxtPage />
+    <NuxtLayout>
+      <NuxtPage />
+    </NuxtLayout>
   </UApp>
 </template>

@@ -25,7 +25,7 @@ onMounted(async () => {
   const { data: sessionData } = await supabase.auth.getSession()
   if (sessionData?.session) {
     toast.add({ title: 'Signed in', description: 'Your account is confirmed. Welcome!', color: 'success', icon: 'i-lucide-badge-check' })
-    return navigateTo('/')
+    return navigateTo('/app/dashboard')
   }
 
   if (!code) {
@@ -38,13 +38,13 @@ onMounted(async () => {
     if (exErr) throw exErr
 
     toast.add({ title: 'Signed in', description: 'Your account is confirmed. Welcome!', color: 'success', icon: 'i-lucide-badge-check' })
-    navigateTo('/')
+    navigateTo('/app/dashboard')
   } catch (e: any) {
     // In some cases the SDK may have already exchanged the code automatically
     const { data: afterData } = await supabase.auth.getSession()
     if (afterData?.session) {
       toast.add({ title: 'Signed in', description: 'Your account is confirmed. Welcome!', color: 'success', icon: 'i-lucide-badge-check' })
-      return navigateTo('/')
+      return navigateTo('/app/dashboard')
     }
 
     console.error('Auth exchange failed:', e)

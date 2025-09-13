@@ -51,6 +51,17 @@ Deployment (typical):
 - [pages/privacy.vue](CodeAny/pages/privacy.vue:0:0-0:0) — Minimal privacy page to avoid broken footer links.
 - [package.json](CodeAny/package.json:0:0-0:0) — Scripts and dependencies.
 
+### Teacher Hub (Dashboard + Courses)
+
+New authenticated area for teachers:
+
+- `GET /app/dashboard` — Dashboard with stats, welcome CTA, and global "Create Course" action.
+- `GET /app/courses/list` — Courses table (title, progress, status, created/updated) with "Create Course".
+
+Both pages use a shared layout `layouts/app.vue` (topbar with logo/search/Create Course/avatar + slim left sidebar navigation) powered by Nuxt UI v4 Dashboard components.
+
+Backend is a FastAPI service located in `backend/` (see below).
+
 ## Scripts
 
 - `npm run dev` — Start Nuxt in development
@@ -65,6 +76,14 @@ Deployment (typical):
 ```env
 SUPABASE_PROJECT_URL="https://<your-project-ref>.supabase.co"
 SUPABASE_API_KEY="<your-supabase-anon-key>"
+
+# Teacher Hub backend
+BACKEND_URL="http://localhost:8000"
+
+# Optional Convex configuration for backend
+CONVEX_URL="https://<your-space>.convex.cloud"
+CONVEX_DEPLOY_KEY=""
+CONVEX_USER_BEARER=""
 
 # Optional if you implement your own Google OAuth (not required when using Supabase's Google provider)
 GOOGLE_OAUTH_ID=""
@@ -148,6 +167,53 @@ supabase db push
 ```
 
 After this, the footer newsletter form will upsert emails into `public.newsletter_subscribers`.
+
+## Backend (FastAPI + Convex)
+
+All backend code lives in `backend/`.
+
+Endpoints used by the Teacher Hub UI:
+
+- `GET /courses` — Returns an array of Course objects (see schema below)
+- `POST /courses` — Creates a new course with `{ title }`
+- `GET /stats` — Returns dashboard stats with recent activity
+
+Course object schema:
+
+```json
+{
+  "id": "string",
+  "title": "string",
+  "progress": 0,
+  "created_at": "ISO 8601",
+  "updated_at": "ISO 8601",
+  "status": "draft|published"
+}
+```
+
+### Run the backend locally
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r backend/requirements.txt
+uvicorn backend.app.main:app --reload --port 8000 --env-file .env
+```
+
+Frontend expects `BACKEND_URL` (defaults to `http://localhost:8000`).
+
+### Connect FastAPI to Convex
+
+Convex HTTP API docs: https://docs.convex.dev/http-api/
+
+Set `CONVEX_URL` in `.env` to your deployment (e.g., `https://abc-123.convex.cloud`). The backend will call:
+
+- `courses:list` (query)
+- `courses:create` (mutation)
+- `stats:get` (query)
+
+If `CONVEX_URL` is not set, the backend falls back to an in‑memory list so you can try the UI immediately.
+
+See `backend/README.md` for detailed examples and curl commands.
 
 ## Deployment
 

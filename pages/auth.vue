@@ -20,7 +20,7 @@ const formValid = ref(true)
 
 onMounted(() => {
   if (user.value) {
-    navigateTo('/')
+    navigateTo('/app/dashboard')
   }
 })
 
@@ -117,7 +117,7 @@ async function onEmailSignIn() {
     })
     if (error) throw error
     toast.add({ title: 'Signed in', description: 'Welcome back!', color: 'success', icon: 'i-lucide-badge-check' })
-    navigateTo('/')
+    navigateTo('/app/dashboard')
   } catch (e: any) {
     toast.add({ title: 'Sign in failed', description: e.message ?? String(e), color: 'error', icon: 'i-lucide-alert-triangle' })
   } finally {
