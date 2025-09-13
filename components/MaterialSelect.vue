@@ -178,10 +178,11 @@ watch(() => props.modelValue, () => {
           :tabindex="index === highlighted ? 0 : -1"
           @click="selectAt(index)"
           @keydown="onOptionKeydown($event, index)"
+          @mouseenter="!item.disabled && (highlighted = index)"
           class="px-3 py-2 text-sm flex items-center justify-between cursor-pointer focus:outline-none"
           :class="[
             index === highlighted ? 'bg-primary/10' : 'bg-transparent',
-            item.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-default/70'
+            item.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary/10'
           ]"
         >
           <span class="truncate">{{ item.label }}</span>
@@ -198,4 +199,3 @@ watch(() => props.modelValue, () => {
 .fade-enter-active, .fade-leave-active { transition: opacity 120ms ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
-

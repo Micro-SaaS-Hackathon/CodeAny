@@ -346,42 +346,7 @@ async function submitAI() {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <MaterialSelect v-model="form.category" :disabled="loadingAI || categoriesLoading" :options="categories" label="Category" :help="categoriesLoading ? 'Fetching categories…' : ''" />
             <MaterialSelect v-model="form.age_range" :disabled="loadingAI" :options="['6–10','11–14','15–18','18–24','25–34','35+']" label="Age range" />
-            <UFormField label="Instructor (optional)">
-              <UInput v-model="form.instructor" icon="i-lucide-user-2" :disabled="loadingAI" placeholder="Dr. Ada Lovelace" />
-            </UFormField>
           </div>
-          <UFormField label="Learning outcomes">
-            <div class="space-y-2">
-              <UInput
-                v-model="learningOutcomesInput"
-                :disabled="loadingAI"
-                placeholder="Type an outcome and press Enter"
-                @keydown="onChipsKeydown('outcome', $event)"
-              />
-              <div class="flex flex-wrap gap-2">
-                <UBadge v-for="(chip, i) in learningChips" :key="chip + i" variant="soft" class="gap-1">
-                  {{ chip }}
-                  <UButton v-if="!loadingAI" icon="i-lucide-x" variant="ghost" size="xs" @click="removeChip('outcome', i)" />
-                </UBadge>
-              </div>
-            </div>
-          </UFormField>
-          <UFormField label="Prerequisites">
-            <div class="space-y-2">
-              <UInput
-                v-model="prerequisitesInput"
-                :disabled="loadingAI"
-                placeholder="Type a prerequisite and press Enter"
-                @keydown="onChipsKeydown('prereq', $event)"
-              />
-              <div class="flex flex-wrap gap-2">
-                <UBadge v-for="(chip, i) in prereqChips" :key="chip + i" variant="soft" class="gap-1">
-                  {{ chip }}
-                  <UButton v-if="!loadingAI" icon="i-lucide-x" variant="ghost" size="xs" @click="removeChip('prereq', i)" />
-                </UBadge>
-              </div>
-            </div>
-          </UFormField>
           <UCheckbox v-model="(form.constraints as any).images" :disabled="loadingAI" label="Generate didactic images" />
         </div>
         
