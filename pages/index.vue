@@ -112,15 +112,7 @@ function onSubscribe() {
         <h2 class="text-3xl md:text-4xl font-bold text-highlighted text-center mt-2">Unique advantages you won’t get elsewhere</h2>
         <p class="text-muted text-center max-w-3xl mx-auto mt-3">Cursly is built for educators who need results fast without sacrificing quality.</p>
         <div class="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <UIcon name="i-lucide-calendar-range" class="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p class="font-semibold">Holiday-aware by default</p>
-              <p class="text-muted text-sm">Schedules respect national/academic holidays automatically.</p>
-            </div>
-          </div>
+  
           <div class="flex items-start gap-4">
             <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <UIcon name="i-lucide-file-text" class="w-5 h-5 text-primary" />
@@ -154,18 +146,10 @@ function onSubscribe() {
             </div>
             <div>
               <p class="font-semibold">Assessment quality</p>
-              <p class="text-muted text-sm">Rubric‑backed assignments and 18+ quiz questions per course.</p>
+              <p class="text-muted text-sm">Rubric‑backed assignments and quiz questions per course.</p>
             </div>
           </div>
-          <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <UIcon name="i-lucide-users" class="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p class="font-semibold">Teach or export</p>
-              <p class="text-muted text-sm">Run classes in Cursly with enrollment and proctoring—or export.</p>
-            </div>
-          </div>
+ 
         </div>
       </UContainer>
     </section>
@@ -185,13 +169,7 @@ function onSubscribe() {
             <p class="font-semibold">AI Course Generation</p>
             <p class="text-sm text-muted mt-1">Generate course outlines, lessons, quizzes, and assignments with rubrics in minutes.</p>
           </div>
-          <div class="p-5 rounded-xl border border-default bg-elevated">
-            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-              <UIcon name="i-lucide-calendar-clock" class="w-5 h-5 text-primary" />
-            </div>
-            <p class="font-semibold">Smart Scheduling</p>
-            <p class="text-sm text-muted mt-1">Holiday‑aware scheduling using national and academic calendars.</p>
-          </div>
+
           <div class="p-5 rounded-xl border border-default bg-elevated">
             <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
               <UIcon name="i-lucide-download" class="w-5 h-5 text-primary" />

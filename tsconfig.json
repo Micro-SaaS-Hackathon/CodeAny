@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "types": ["nuxt", "node"],
+    "types": ["nuxt", "node", "@nuxt/ui", "@nuxtjs/supabase", "nitropack", "h3"],
     "strict": true
   }
 }

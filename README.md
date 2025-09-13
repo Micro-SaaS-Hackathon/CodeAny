@@ -62,7 +62,7 @@ Deployment (typical):
 - None required for the static landing page.
 - For auth and user accounts, fill these in `.env` (copy from `sample.env`):
 
-```
+```env
 SUPABASE_PROJECT_URL="https://<your-project-ref>.supabase.co"
 SUPABASE_API_KEY="<your-supabase-anon-key>"
 
@@ -88,6 +88,7 @@ Routes:
 Supabase module reads runtime config from `runtimeConfig.public.supabase` (wired to `SUPABASE_PROJECT_URL` and `SUPABASE_API_KEY`).
 
 #### Configure in Supabase Dashboard
+
 1. Auth > URL Configuration:
    - Add Redirect URLs: `http://localhost:3010/confirm` (dev) and your production `https://your-domain/confirm`.
 2. Auth > Providers > Google:
@@ -97,12 +98,56 @@ Supabase module reads runtime config from `runtimeConfig.public.supabase` (wired
 #### Local Setup
 1. Copy vars: `cp sample.env .env` and fill values.
 2. Install deps and start:
+
    ```bash
    npm install
    npm run dev
    # http://localhost:3010
    ```
+
 3. Visit `/auth` to sign up/sign in. After confirming email or Google OAuth, you will be redirected to `/confirm` and then to `/`.
+
+## Database: Newsletter subscribers
+
+We store newsletter signups in `public.newsletter_subscribers` via the API route `POST /api/newsletter/subscribe`.
+
+Migration file added:
+
+- `supabase/migrations/20250913_154251_newsletter_subscribers.sql`
+
+This migration:
+
+- Creates the `newsletter_subscribers` table with `id`, `email`, `created_at`.
+- Adds a case-insensitive unique index on `email`.
+- Enables RLS and allows `anon` inserts (so the API route can upsert with the anon key).
+- Blocks `anon` selects by default.
+
+### Apply via Supabase Dashboard (simplest)
+
+1. Open your Supabase project > SQL Editor.
+2. Paste the contents of `supabase/migrations/20250913_154251_newsletter_subscribers.sql` and run.
+3. Verify the table exists under `Table Editor`.
+
+### Apply via Supabase CLI
+
+Prereqs: Supabase CLI installed and logged in.
+
+```bash
+# install (choose one)
+npm i -g supabase
+# or: brew install supabase/tap/supabase
+
+# authenticate in your terminal
+supabase login
+
+# link your project (use the project ref from SUPABASE_PROJECT_URL)
+supabase link --project-ref <your-project-ref>
+
+# apply local migrations in ./supabase/migrations to your linked project
+supabase db push
+```
+
+After this, the footer newsletter form will upsert emails into `public.newsletter_subscribers`.
 
 ## Deployment
 
@@ -133,5 +178,5 @@ Auth routes (`/auth`, `/confirm`) are excluded from prerender to enable dynamic 
 
 ## Notes for the Hackathon
 
-- Supabase documentation is indexed for fast lookup via NIA MCP: https://supabase.com/docs
+- Supabase documentation is indexed for fast lookup via NIA MCP: [https://supabase.com/docs](https://supabase.com/docs)
 - Ask the AI assistant for examples (e.g., `exchangeCodeForSession`, `signInWithOAuth`, `emailRedirectTo`) and it can pull code-level references quickly.
