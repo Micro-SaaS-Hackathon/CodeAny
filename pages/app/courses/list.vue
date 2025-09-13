@@ -16,7 +16,8 @@ const courses = ref<Course[]>([])
 async function load() {
   loading.value = true
   try {
-    courses.value = await listCourses()
+    const data = await listCourses()
+    courses.value = Array.isArray(data) ? data : []
   } finally {
     loading.value = false
   }
@@ -30,14 +31,7 @@ async function onCreateCourse() {
 
 onMounted(load)
 
-// Use label (for Nuxt UI headers) and add id to satisfy newer table internals
-const columns = [
-  { id: 'title', key: 'title', label: 'Title' },
-  { id: 'progress', key: 'progress', label: 'Progress' },
-  { id: 'status', key: 'status', label: 'Status' },
-  { id: 'created_at', key: 'created_at', label: 'Created' },
-  { id: 'updated_at', key: 'updated_at', label: 'Updated' }
-]
+const total = computed(() => courses.value.length)
 
 function fmt(d: string) {
   try {
@@ -66,7 +60,7 @@ function fmt(d: string) {
     <UCard>
       <template #header>
         <div class="flex items-center justify-between">
-          <p class="font-medium">All courses</p>
+          <p class="font-medium">All courses <span class="text-dimmed">({{ total }})</span></p>
           <UButton size="sm" icon="i-lucide-refresh-ccw" variant="ghost" @click="load" />
         </div>
       </template>
@@ -84,19 +78,35 @@ function fmt(d: string) {
           <USkeleton class="h-10 w-full" />
           <USkeleton class="h-10 w-full" />
         </div>
-        <UTable v-else :rows="courses" :columns="columns" class="min-w-full">
-          <template #progress-data="{ row }">
-            <div class="flex items-center gap-3 w-56">
-              <UProgress :value="row.progress" class="flex-1" />
-              <span class="text-sm text-toned w-10 text-right">{{ row.progress }}%</span>
-            </div>
-          </template>
-          <template #status-data="{ row }">
-            <UBadge :color="row.status === 'published' ? 'green' : 'gray'" :label="row.status" />
-          </template>
-          <template #created_at-data="{ row }">{{ fmt(row.created_at) }}</template>
-          <template #updated_at-data="{ row }">{{ fmt(row.updated_at) }}</template>
-        </UTable>
+        <div v-else class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-dimmed">
+                <th class="px-3 py-2">Title</th>
+                <th class="px-3 py-2">Progress</th>
+                <th class="px-3 py-2">Status</th>
+                <th class="px-3 py-2">Created</th>
+                <th class="px-3 py-2">Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in courses" :key="row.id" class="border-t border-default">
+                <td class="px-3 py-2 font-medium">{{ row.title }}</td>
+                <td class="px-3 py-2">
+                  <div class="flex items-center gap-3 w-56">
+                    <UProgress :value="row.progress" class="flex-1" />
+                    <span class="text-sm text-toned w-10 text-right">{{ row.progress }}%</span>
+                  </div>
+                </td>
+                <td class="px-3 py-2">
+                  <UBadge :color="row.status === 'published' ? 'green' : 'gray'" :label="row.status" />
+                </td>
+                <td class="px-3 py-2">{{ fmt(row.created_at) }}</td>
+                <td class="px-3 py-2">{{ fmt(row.updated_at) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </ClientOnly>
     </UCard>
   </div>
