@@ -7,6 +7,11 @@
 - Backend (FastAPI): `backend/app/main.py`, `backend/app/models.py`, `backend/requirements.txt`. Falls back to in‑memory if Convex is unset.
 - Supabase SQL: `supabase/migrations/`.
 
+## Rendering Strategy
+- Landing/marketing routes (e.g., `/`, `/privacy`) use SSR/SSG (pre‑rendered) for performance.
+- Application routes under `/app/**` are client‑rendered only (no SSR). Nuxt `routeRules` and page `definePageMeta({ ssr: false })` enforce this.
+- Server middleware must not redirect `/app/**` during SSR; auth gating occurs client‑side after Supabase session initializes.
+
 ## Build, Test, and Development Commands
 - Env: `cp sample.env .env` then fill values.
 - Frontend dev: `npm install` · `npm run dev` (http://localhost:3010)

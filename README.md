@@ -51,6 +51,13 @@ Deployment (typical):
 - [pages/privacy.vue](CodeAny/pages/privacy.vue:0:0-0:0) — Minimal privacy page to avoid broken footer links.
 - [package.json](CodeAny/package.json:0:0-0:0) — Scripts and dependencies.
 
+### Rendering Strategy
+
+- Landing/marketing routes are SSR/SSG (pre-rendered) for speed and SEO.
+- Application (Teacher Hub) routes under `/app/**` are client-rendered only (no SSR).
+  - Enforced via `definePageMeta({ ssr: false })` on app pages and `routeRules['/app/**'] = { ssr: false, prerender: false }` in `nuxt.config.ts`.
+  - Server middleware avoids SSR redirects on `/app/**`; auth checks happen client-side after Supabase session initializes.
+
 ### Teacher Hub (Dashboard + Courses)
 
 New authenticated area for teachers:
