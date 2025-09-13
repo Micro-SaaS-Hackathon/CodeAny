@@ -1,19 +1,29 @@
 import { defineNuxtRouteMiddleware, navigateTo } from '#app'
-import { useSupabaseUser } from '#imports'
+import { useSupabaseUser, useSupabaseClient } from '#imports'
 
-export default defineNuxtRouteMiddleware((to) => {
-  // Only run on client where Supabase auth state is available
+// Client-side guard that waits for Supabase session before redirecting
+export default defineNuxtRouteMiddleware(async (to) => {
   if (process.server) return
 
   const user = useSupabaseUser()
+  const supabase = useSupabaseClient()
 
-  // If authenticated and going to public entry points, send to Teacher Hub
-  if (user.value && (to.path === '/' || to.path === '/auth' || to.path === '/confirm')) {
-    return navigateTo('/app/dashboard')
+  // Public → app redirect when already authenticated
+  if (to.path === '/' || to.path === '/auth' || to.path === '/confirm') {
+    if (!user.value) {
+      const { data } = await supabase.auth.getSession()
+      if (data.session) user.value = data.session.user as any
+    }
+    if (user.value) return navigateTo('/app/dashboard')
+    return
   }
 
-  // Protect Teacher Hub routes
-  if (!user.value && to.path.startsWith('/app')) {
-    return navigateTo('/auth')
+  // Protect /app/** but wait for session to initialize once
+  if (to.path.startsWith('/app')) {
+    if (!user.value) {
+      const { data } = await supabase.auth.getSession()
+      if (data.session) user.value = data.session.user as any
+    }
+    if (!user.value) return navigateTo('/auth')
   }
 })

@@ -4,7 +4,8 @@ import type { Course } from '~/types/course'
 import { useCourses } from '~/composables/useCourses'
 import { useToast } from '#imports'
 
-definePageMeta({ layout: 'app' })
+// Render this page client-side only to avoid any SSR/hydration issues
+definePageMeta({ layout: 'app', ssr: false })
 
 const toast = useToast()
 const { listCourses, createCourse } = useCourses()
@@ -29,12 +30,13 @@ async function onCreateCourse() {
 
 onMounted(load)
 
+// Use label (for Nuxt UI headers) and add id to satisfy newer table internals
 const columns = [
-  { key: 'title', label: 'Title' },
-  { key: 'progress', label: 'Progress' },
-  { key: 'status', label: 'Status' },
-  { key: 'created_at', label: 'Created' },
-  { key: 'updated_at', label: 'Updated' }
+  { id: 'title', key: 'title', label: 'Title' },
+  { id: 'progress', key: 'progress', label: 'Progress' },
+  { id: 'status', key: 'status', label: 'Status' },
+  { id: 'created_at', key: 'created_at', label: 'Created' },
+  { id: 'updated_at', key: 'updated_at', label: 'Updated' }
 ]
 
 function fmt(d: string) {
@@ -69,25 +71,33 @@ function fmt(d: string) {
         </div>
       </template>
 
-      <div v-if="loading" class="space-y-2">
-        <USkeleton class="h-10 w-full" />
-        <USkeleton class="h-10 w-full" />
-        <USkeleton class="h-10 w-full" />
-      </div>
-
-      <UTable v-else :rows="courses" :columns="columns" class="min-w-full">
-        <template #progress-data="{ row }">
-          <div class="flex items-center gap-3 w-56">
-            <UProgress :value="row.progress" class="flex-1" />
-            <span class="text-sm text-toned w-10 text-right">{{ row.progress }}%</span>
+      <ClientOnly>
+        <template #fallback>
+          <div class="space-y-2">
+            <USkeleton class="h-10 w-full" />
+            <USkeleton class="h-10 w-full" />
+            <USkeleton class="h-10 w-full" />
           </div>
         </template>
-        <template #status-data="{ row }">
-          <UBadge :color="row.status === 'published' ? 'green' : 'gray'" :label="row.status" />
-        </template>
-        <template #created_at-data="{ row }">{{ fmt(row.created_at) }}</template>
-        <template #updated_at-data="{ row }">{{ fmt(row.updated_at) }}</template>
-      </UTable>
+        <div v-if="loading" class="space-y-2">
+          <USkeleton class="h-10 w-full" />
+          <USkeleton class="h-10 w-full" />
+          <USkeleton class="h-10 w-full" />
+        </div>
+        <UTable v-else :rows="courses" :columns="columns" class="min-w-full">
+          <template #progress-data="{ row }">
+            <div class="flex items-center gap-3 w-56">
+              <UProgress :value="row.progress" class="flex-1" />
+              <span class="text-sm text-toned w-10 text-right">{{ row.progress }}%</span>
+            </div>
+          </template>
+          <template #status-data="{ row }">
+            <UBadge :color="row.status === 'published' ? 'green' : 'gray'" :label="row.status" />
+          </template>
+          <template #created_at-data="{ row }">{{ fmt(row.created_at) }}</template>
+          <template #updated_at-data="{ row }">{{ fmt(row.updated_at) }}</template>
+        </UTable>
+      </ClientOnly>
     </UCard>
   </div>
 </template>

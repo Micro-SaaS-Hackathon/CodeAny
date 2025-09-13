@@ -54,7 +54,8 @@ export default defineNuxtConfig({
   routeRules: {
     '/auth': { prerender: false },
     '/confirm': { prerender: false },
-    '/app/**': { prerender: false },
+    // Ensure all Teacher Hub routes render on client only
+    '/app/**': { prerender: false, ssr: false },
     '/**': { prerender: true }
   },
   compatibilityDate: '2024-09-01'

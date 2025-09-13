@@ -3,7 +3,8 @@ import { ref, onMounted } from 'vue'
 import { useStats } from '~/composables/useStats'
 import { } from '#imports'
 
-definePageMeta({ layout: 'app' })
+// Render client-side only for consistent state with Supabase
+definePageMeta({ layout: 'app', ssr: false })
 
 const { getStats } = useStats()
 
