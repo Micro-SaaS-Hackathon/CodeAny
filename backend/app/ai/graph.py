@@ -8,6 +8,7 @@ from .nodes.manim_writer import write_manim_code
 from .nodes.gemini_image import generate_gemini_image_or_fallback
 from .compile_manim import compile_manim_to_mp4
 from .persist_convex import persist_course_and_modules
+from .logging_utils import get_logger
 from ..convex_client import ConvexClient
 
 
@@ -42,6 +43,7 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
 
     Uses async fan-out to generate per-module assets, then compiles Manim and persists.
     """
+    log = get_logger("graph")
     def report(pct: int, status: str):
         if progress_cb:
             try:
@@ -55,6 +57,7 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
     constraints = state.get("constraints", {})
 
     try:
+        log.info(f"Graph start | topic={topic} | level={level}")
         # Prefer LangGraph orchestration if available
         from langgraph.graph import StateGraph, START, END  # type: ignore
         from langgraph.checkpoint.sqlite import SqliteSaver  # type: ignore
@@ -93,7 +96,9 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
                     "manim_code": code,
                     "gemini_output": gim,
                 }
+            log.info(f"Fanout start | modules={len(specs)}")
             mods = await asyncio.gather(*[process(s) for s in specs])
+            log.info(f"Fanout done | modules={len(mods)}")
             state_in["modules"] = {m["module_id"]: m for m in mods}  # type: ignore
             rep = state_in.get("_report")  # type: ignore
             if rep:
@@ -106,7 +111,9 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
                 path = await asyncio.to_thread(compile_manim_to_mp4, mart["module_id"], mart.get("manim_code", ""))
                 mart["video_path"] = path
                 return key, mart
+            log.info(f"Compile start | modules={len(mods_dict)}")
             items = await asyncio.gather(*[_c(k, v) for k, v in mods_dict.items()])
+            log.info(f"Compile done | modules={len(items)}")
             state_in["modules"] = {k: v for k, v in items}  # type: ignore
             rep = state_in.get("_report")  # type: ignore
             if rep:
@@ -137,7 +144,9 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
                 "status": "uploading",
                 "progress": 80,
             }
+            log.info("Persist start")
             pr = await persist_course_and_modules(convex=convex, course_payload=course_payload, modules=mods_list, existing_course_id=existing_course_id)
+            log.info("Persist done")
             state_in["course_package"] = {
                 "topic": topic_l,
                 "level": level_l,
@@ -173,9 +182,11 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
         out_state: CourseState = await graph.ainvoke(state)  # type: ignore
         course_package = out_state.get("course_package", {})  # type: ignore
         report(100, "ready")
+        log.info("Graph done | status=ready")
         return course_package  # type: ignore
     except Exception:
         # Fallback async orchestration without LangGraph if library missing
+        log.warning("LangGraph unavailable; using asyncio fallback")
         report(5, "creating")
         syllabus = await generate_syllabus(topic, level, constraints)
         state["syllabus"] = syllabus  # type: ignore
@@ -251,6 +262,7 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
     }
     state["course_package"] = course_package
     report(100, "ready")
+    log.info("Graph done | status=ready (fallback)")
     return course_package
 
 

@@ -77,6 +77,9 @@ Set the following env var(s):
 - `CONVEX_URL` — deployment URL, e.g. `https://your-space-123.convex.cloud`
 - Optional: `CONVEX_USER_BEARER` for user-authenticated calls, or `CONVEX_DEPLOY_KEY` for admin streaming APIs
 
+Notes:
+- Prefer the `.convex.cloud` domain. If you only have a `.convex.site` URL, the client will automatically try a `.convex.cloud` fallback and alternate HTTP endpoints.
+
 The backend expects these Convex function names (you can rename them if you also update the backend):
 
 - Query `courses:list` → returns `Course[]`

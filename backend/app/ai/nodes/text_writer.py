@@ -2,6 +2,9 @@ from __future__ import annotations
 from typing import Dict, Any
 
 from ..llm import openrouter_chat
+from ..logging_utils import get_logger, preview
+
+log = get_logger("nodes.text")
 from ..clients import env_models
 
 
@@ -30,6 +33,7 @@ def text_prompt(module: Dict[str, Any], language: str, constraints: Dict[str, An
 async def write_text(module: Dict[str, Any], language: str, constraints: Dict[str, Any]) -> str:
     models = env_models()
     try:
+        log.info(f"Text start | module={module.get('id')} | title={module.get('title')}")
         content = await openrouter_chat(
             system=TEXT_SYSTEM,
             user=text_prompt(module, language, constraints),
@@ -37,4 +41,8 @@ async def write_text(module: Dict[str, Any], language: str, constraints: Dict[st
         )
     except Exception:
         content = ""
+    if content:
+        log.info(f"Text ok | module={module.get('id')} | len={len(content)} | preview={preview(content)}")
+    else:
+        log.warning(f"Text empty | module={module.get('id')}")
     return content or "# Lesson\n\nContent unavailable."

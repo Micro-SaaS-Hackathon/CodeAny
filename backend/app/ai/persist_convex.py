@@ -7,6 +7,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
 from ..convex_client import ConvexClient
+from .logging_utils import get_logger
+
+log = get_logger("persist")
 
 
 @dataclass
@@ -19,7 +22,11 @@ class PersistResult:
 async def convex_generate_upload_url(convex: ConvexClient) -> Optional[str]:
     try:
         data = await convex.run("files:generateUploadUrl", {})
-        return data.get("uploadUrl") if isinstance(data, dict) else None
+        # Convex typical pattern returns a string URL; some wrappers may return an object
+        if isinstance(data, str):
+            return data
+        if isinstance(data, dict):
+            return data.get("uploadUrl") or data.get("url")
     except Exception:
         return None
 
@@ -59,10 +66,20 @@ async def persist_course_and_modules(
             course_id = existing_course_id
         else:
             try:
+                log.info(f"Convex createDetailed start | title={course_payload.get('title')} | topic={course_payload.get('topic')}")
                 course_doc = await convex.mutation("courses:createDetailed", course_payload)
                 course_id = course_doc.get("id") if isinstance(course_doc, dict) else None
+                log.info(f"Convex createDetailed ok | courseId={course_id}")
             except Exception:
                 course_id = None
+                # Fallback to minimal create if detailed function missing
+                try:
+                    min_doc = await convex.mutation("courses:create", {"title": course_payload.get("title") or course_payload.get("topic") or "Untitled Course"})
+                    if isinstance(min_doc, dict):
+                        course_id = min_doc.get("id") or min_doc.get("_id")
+                        log.info(f"Convex create fallback ok | courseId={course_id}")
+                except Exception:
+                    course_id = None
 
         # Step: upload files and upsert modules
         for m in modules:
@@ -78,6 +95,7 @@ async def persist_course_and_modules(
                         img_bytes = base64.b64decode(m["gemini_output"]["gemini_image_b64"])
                         sid = await convex_put_bytes(upload_url, img_bytes, content_type="image/png")
                         storage_ids[str(mid)]["image"] = sid
+                        log.info(f"Convex upload image ok | module={mid} | storageId={sid}")
                     except Exception:
                         pass
 
@@ -90,6 +108,7 @@ async def persist_course_and_modules(
                             vid_bytes = f.read()
                         sid = await convex_put_bytes(upload_url, vid_bytes, content_type="video/mp4")
                         storage_ids[str(mid)]["video"] = sid
+                        log.info(f"Convex upload video ok | module={mid} | storageId={sid}")
                     except Exception:
                         pass
 
@@ -106,6 +125,7 @@ async def persist_course_and_modules(
                     "imageCaption": m.get("gemini_output", {}).get("gemini_image_caption"),
                     "videoStorageId": storage_ids[str(mid)]["video"],
                 })
+                log.info(f"Convex upsert module ok | module={mid}")
             except Exception:
                 pass
 
@@ -113,6 +133,7 @@ async def persist_course_and_modules(
         try:
             if course_id:
                 await convex.mutation("courses:finalize", {"courseId": course_id, "moduleIds": module_ids})
+                log.info(f"Convex finalize course ok | courseId={course_id} | modules={len(module_ids)}")
         except Exception:
             pass
 

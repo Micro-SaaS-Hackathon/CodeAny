@@ -6,6 +6,9 @@ import asyncio
 from typing import Optional, Dict, Any
 
 from .clients import get_openrouter_client, openrouter_headers
+from .logging_utils import get_logger, preview
+
+log = get_logger("llm")
 
 
 def _is_retryable_error(err: Exception) -> bool:
@@ -64,6 +67,7 @@ async def openrouter_chat(
                     if system:
                         messages.append({"role": "system", "content": system})
                     messages.append({"role": "user", "content": user})
+                    log.info(f"OpenRouter chat start | model={model} | attempt={attempt}/{retries} | sys_len={len(system or '')} | user_len={len(user)}")
                     resp = client.chat.completions.create(
                         model=model,
                         messages=messages,
@@ -72,12 +76,15 @@ async def openrouter_chat(
                         timeout=timeout_s,
                         extra_headers=headers,
                     )
-                    return resp.choices[0].message.content if resp.choices else ""
+                    content = resp.choices[0].message.content if resp.choices else ""
+                    log.info(f"OpenRouter chat ok | model={model} | content_preview={preview(content)}")
+                    return content
 
                 content = await asyncio.to_thread(_call_once)
                 return content or ""
             except Exception as e:
                 last_err = e
+                log.warning(f"OpenRouter chat error | model={model} | attempt={attempt}/{retries} | err={e}")
                 if attempt >= retries or not _is_retryable_error(e):
                     raise
                 await asyncio.sleep(_backoff_delay(attempt))

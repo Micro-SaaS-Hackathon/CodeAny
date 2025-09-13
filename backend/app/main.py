@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from .models import Course, CourseCreate, Stats, Activity, now_iso, AICourseRequest, AICourseResponse
 from .convex_client import ConvexClient
 from .ai import run_course_build
+from .ai.logging_utils import get_logger
 
 app = FastAPI(title="Cursly Teacher Hub API", version="0.1.0")
 
@@ -24,6 +25,7 @@ app.add_middleware(
 )
 
 convex = ConvexClient()
+log = get_logger("api")
 
 # --- In-memory fallback (for local dev without Convex) ---
 _memory_courses: List[Course] = []
@@ -61,6 +63,39 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/convex/diagnostics")
+async def convex_diagnostics():
+    """Return Convex connectivity diagnostics to ease setup and debugging."""
+    info: Dict[str, Any] = {
+        "enabled": convex.enabled,
+        "base_url": getattr(convex, "base_url", None),
+        "auth_mode": (
+            "admin" if getattr(convex, "deploy_key", None)
+            else ("user_bearer" if getattr(convex, "user_bearer", None) else "none")
+        ),
+    }
+    if not convex.enabled:
+        info["status"] = "disabled (CONVEX_URL not set)"
+        return info
+    # Test query endpoint using a known function name used in this app
+    try:
+        await convex.query("stats:get", {})
+        info["query_ok"] = True
+        info["query_path"] = "/api/query"
+    except Exception as e:
+        info["query_ok"] = False
+        info["query_error"] = str(e)
+    # Test run endpoint and function identifier normalization (':' -> '/')
+    try:
+        await convex.run("files:generateUploadUrl", {})
+        info["run_ok"] = True
+        info["run_path"] = "/api/run/{namespace/function}"
+    except Exception as e:
+        info["run_ok"] = False
+        info["run_error"] = str(e)
+    return info
+
+
 @app.get("/courses", response_model=List[Course])
 async def get_courses():
     if convex.enabled:
@@ -92,17 +127,25 @@ async def get_stats():
     if convex.enabled:
         try:
             data = await convex.query("stats:get", {})
+            # Ensure shape matches expected schema
+            if not isinstance(data, dict):
+                raise ValueError("Invalid stats shape")
+            if not all(k in data for k in ("total_courses", "active_teachers", "recent_activity")):
+                raise ValueError("Missing stats fields")
             return Stats(**data)
         except Exception as e:
             print("Convex stats error:", e)
             # compute from Convex courses as a backup
             try:
-                courses = await convex.query("courses:list", {})
-                total = len(courses)
-                activities = [
-                    Activity(course_id=c.get('id',''), event="updated", timestamp=c.get('updated_at', now_iso()))
-                    for c in courses[-5:]
-                ]
+                courses_raw = await convex.query("courses:list", {})
+                courses_list = courses_raw if isinstance(courses_raw, list) else []
+                total = len(courses_list)
+                recent = courses_list[-5:] if total else []
+                activities = []
+                for c in recent:
+                    cid = (c.get('id') if isinstance(c, dict) else '') or ''
+                    ts = (c.get('updated_at') if isinstance(c, dict) else None) or now_iso()
+                    activities.append(Activity(course_id=cid, event="updated", timestamp=ts))
                 return Stats(total_courses=total, active_teachers=1 if total else 0, recent_activity=activities)
             except Exception:
                 pass
@@ -149,6 +192,7 @@ async def _update_progress(target_id: Optional[str], status: str, progress: int)
 @app.post("/ai/build", response_model=AICourseResponse)
 async def ai_build(payload: AICourseRequest):
     thread_id = str(uuid4())
+    log.info(f"/ai/build start | thread={thread_id} | topic={payload.topic} | level={payload.level} | title={payload.title}")
 
     # Map UI fields to agent constraints
     constraints = dict(payload.constraints or {})
@@ -191,8 +235,17 @@ async def ai_build(payload: AICourseRequest):
             })
             if isinstance(doc, dict):
                 course_id = doc.get("id") or doc.get("_id")
+            log.info(f"Convex pre-createDetailed ok | courseId={course_id}")
         except Exception:
             course_id = None
+            # Fallback to minimal create if detailed function is not available
+            try:
+                min_doc = await convex.mutation("courses:create", {"title": payload.title or payload.topic})
+                if isinstance(min_doc, dict):
+                    course_id = min_doc.get("id") or min_doc.get("_id")
+                    log.info(f"Convex pre-create fallback ok | courseId={course_id}")
+            except Exception:
+                course_id = None
 
     # Create memory record mirroring the course
     mem_course = _create_memory_ai_course_doc(payload)
@@ -203,6 +256,7 @@ async def ai_build(payload: AICourseRequest):
         _threads[thread_id]["progress"] = pct
         _threads[thread_id]["status"] = status
         await _update_progress(course_id or mem_course.id, status, pct)
+        log.info(f"progress | thread={thread_id} | status={status} | {pct}%")
 
     # Run build (synchronous for now)
     try:
@@ -217,9 +271,11 @@ async def ai_build(payload: AICourseRequest):
         _threads[thread_id]["course"] = course_package
         # Final status
         await _update_progress(course_id or mem_course.id, "ready", 100)
+        log.info(f"/ai/build done | thread={thread_id} | status=ready")
     except Exception as e:
         _threads[thread_id]["error"] = str(e)
         await _update_progress(course_id or mem_course.id, "failed", 100)
+        log.error(f"/ai/build failed | thread={thread_id} | err={e}")
         raise HTTPException(status_code=500, detail=f"Build failed: {e}")
 
     return AICourseResponse(thread_id=thread_id, course=_threads[thread_id].get("course", {}))

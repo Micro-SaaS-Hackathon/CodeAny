@@ -2,6 +2,9 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from ..llm import openrouter_chat, safe_json_loads
+from ..logging_utils import get_logger, preview
+
+log = get_logger("nodes.syllabus")
 from ..clients import env_models
 
 
@@ -28,6 +31,7 @@ def syllabus_user_prompt(topic: str, level: str, constraints: Dict[str, Any]) ->
 async def generate_syllabus(topic: str, level: str, constraints: Dict[str, Any]) -> List[Dict[str, Any]]:
     models = env_models()
     try:
+        log.info(f"Syllabus start | topic={topic} | level={level} | constraints_keys={list(constraints.keys())}")
         content = await openrouter_chat(
             system=SYLLABUS_SYSTEM,
             user=syllabus_user_prompt(topic, level, constraints),
@@ -35,6 +39,7 @@ async def generate_syllabus(topic: str, level: str, constraints: Dict[str, Any])
         )
     except Exception:
         content = ""
+    log.info(f"Syllabus raw preview={preview(content)}")
     data = safe_json_loads(content or "")
     if not data or "modules" not in data or not isinstance(data["modules"], list):
         # Fallback minimal syllabus (6 modules)
@@ -48,5 +53,8 @@ async def generate_syllabus(topic: str, level: str, constraints: Dict[str, Any])
                 "objectives": ["Explain key ideas", "Apply basic methods"],
                 "outline": ["Introduction", "Core Concepts", "Worked Example", "Practice", "Recap"],
             })
+        log.warning(f"Syllabus fallback used | count={count}")
         return modules
-    return data["modules"]
+    mods = data["modules"]
+    log.info(f"Syllabus ok | modules={len(mods)} | ids={[m.get('id') for m in mods]}")
+    return mods

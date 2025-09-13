@@ -65,3 +65,6 @@ backend/convex/.temp
 
 #Pycache
 __pycache__
+
+# Temp
+tmp/manim_runs

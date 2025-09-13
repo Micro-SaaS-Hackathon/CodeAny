@@ -3,6 +3,9 @@ import ast
 from typing import Dict, Any
 
 from ..llm import openrouter_chat
+from ..logging_utils import get_logger, preview
+
+log = get_logger("nodes.manim")
 from ..clients import env_models
 
 
@@ -28,6 +31,7 @@ def manim_prompt(module: Dict[str, Any], language: str) -> str:
 async def write_manim_code(module: Dict[str, Any], language: str) -> str:
     models = env_models()
     try:
+        log.info(f"Manim start | module={module.get('id')} | title={module.get('title')}")
         code = await openrouter_chat(
             system=MANIM_SYSTEM,
             user=manim_prompt(module, language),
@@ -48,6 +52,8 @@ async def write_manim_code(module: Dict[str, Any], language: str) -> str:
     # Syntax check
     try:
         ast.parse(code)
+        log.info(f"Manim parsed | module={module.get('id')} | len={len(code)} | preview={preview(code)}")
     except Exception as e:
         code = f"# Syntax error: {e}\n" + code
+        log.warning(f"Manim syntax error | module={module.get('id')} | err={e} | preview={preview(code)}")
     return code
