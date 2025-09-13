@@ -2,6 +2,8 @@
 
 A single-screen marketing landing page built with Nuxt 4.1.1, Nuxt UI v4, Tailwind CSS v4 and TypeScript. Optimized to route visitors to a live demo, with clear value props, confidence cues, accessible visuals, and fast interactions.
 
+Presentation in presentation folder - Cursly.pdf
+
 ## Stack
 
 - Nuxt.js 4.1.1 (TypeScript, SSG-ready)
