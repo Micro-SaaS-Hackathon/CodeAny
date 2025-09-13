@@ -93,6 +93,12 @@ const titleColor = computed(() => (isTitleValid.value || !form.value.title) ? un
 const descColor = computed(() => (isDescValid.value || !form.value.description) ? undefined : 'red')
 const canSubmit = computed(() => isTitleValid.value && isDescValid.value && !loadingAI.value)
 
+function levelToLabel(level: string | undefined) {
+  const map: Record<string, string> = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' }
+  if (!level) return undefined
+  return map[level] || (level.charAt(0).toUpperCase() + level.slice(1))
+}
+
 function onKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'enter') {
     e.preventDefault()
@@ -226,6 +232,7 @@ async function submitAI() {
       title: form.value.title,
       description: form.value.description,
       level: form.value.level,
+      level_label: levelToLabel(form.value.level),
       instructor: form.value.instructor,
       audience: form.value.audience,
       duration_weeks: form.value.duration_weeks,
