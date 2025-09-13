@@ -54,3 +54,14 @@ Thumbs.db
 
 # Supabase
 supabase/.temp
+
+# Convex
+convex/.temp
+
+
+#Python
+backend/.venv
+backend/convex/.temp
+
+#Pycache
+__pycache__
