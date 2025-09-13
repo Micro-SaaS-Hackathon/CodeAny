@@ -29,3 +29,26 @@ class Stats(BaseModel):
 
 def now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+
+
+# --- AI Course schemas ---
+class AICourseRequest(BaseModel):
+    topic: str
+    level: str = 'beginner'
+    title: str
+    description: str
+    instructor: str | None = None
+    audience: str | None = None
+    level_label: str | None = None
+    duration_weeks: int | None = None
+    category: str | None = None
+    age_range: str | None = None
+    language: Literal['en', 'az'] = 'en'
+    learning_outcomes: List[str] = []
+    prerequisites: List[str] = []
+    constraints: dict = {}
+
+
+class AICourseResponse(BaseModel):
+    thread_id: str
+    course: dict
