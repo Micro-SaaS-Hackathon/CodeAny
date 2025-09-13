@@ -1,7 +1,26 @@
 import { defineNuxtConfig } from 'nuxt/config'
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
-  modules: ['@nuxt/ui', '@nuxtjs/supabase'],
+  modules: [
+    '@nuxt/ui',
+    ['@nuxtjs/supabase', {
+      url: process.env.SUPABASE_PROJECT_URL,
+      key: process.env.SUPABASE_API_KEY,
+      redirect: false,
+      useSsrCookies: false,
+      clientOptions: {
+        auth: {
+          flowType: 'pkce',
+          detectSessionInUrl: true,
+          persistSession: true
+        }
+      },
+      redirectOptions: {
+        login: '/auth',
+        callback: '/confirm'
+      }
+    }]
+  ],
   css: ['~/assets/css/main.css'],
   devServer: {
     port: 3010,

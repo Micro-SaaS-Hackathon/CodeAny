@@ -12,7 +12,7 @@
         <ul class="list-disc pl-6 text-toned">
           <li>No training on your data</li>
           <li>Exports remain local (CSV/JSON)</li>
-          <li>Contact us for deletion requests at <a href="mailto:contact@cursly.app" class="text-primary underline">contact@cursly.app</a></li>
+          <li>Contact us for deletion requests at <a href="mailto:curslyapp@gmail.com" class="text-primary underline">curslyapp@gmail.com</a></li>
         </ul>
       </div>
     </UCard>

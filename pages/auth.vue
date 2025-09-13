@@ -18,7 +18,13 @@ onMounted(() => {
   }
 })
 
-const origin = process.client ? window.location.origin : ''
+function getConfirmRedirect() {
+  // Build an absolute URL for Supabase redirect/magic link
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return new URL('/confirm', window.location.origin).toString()
+  }
+  return '/confirm'
+}
 
 async function onEmailSignUp() {
   loadingSignUp.value = true
@@ -27,7 +33,7 @@ async function onEmailSignUp() {
       email: email.value,
       password: password.value,
       options: {
-        emailRedirectTo: `${origin}/confirm`
+        emailRedirectTo: getConfirmRedirect()
       }
     })
     if (error) throw error
@@ -67,7 +73,7 @@ async function onGoogleSignIn() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${origin}/confirm`
+        redirectTo: getConfirmRedirect()
       }
     })
     if (error) throw error

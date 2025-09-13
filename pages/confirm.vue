@@ -21,6 +21,13 @@ onMounted(async () => {
     return navigateTo('/auth')
   }
 
+  // First, check if a session already exists (e.g., auto-exchanged via detectSessionInUrl)
+  const { data: sessionData } = await supabase.auth.getSession()
+  if (sessionData?.session) {
+    toast.add({ title: 'Signed in', description: 'Your account is confirmed. Welcome!', color: 'success', icon: 'i-lucide-badge-check' })
+    return navigateTo('/')
+  }
+
   if (!code) {
     toast.add({ title: 'Missing code', description: 'No code found in the URL.', color: 'warning', icon: 'i-lucide-info' })
     return navigateTo('/auth')
@@ -33,7 +40,15 @@ onMounted(async () => {
     toast.add({ title: 'Signed in', description: 'Your account is confirmed. Welcome!', color: 'success', icon: 'i-lucide-badge-check' })
     navigateTo('/')
   } catch (e: any) {
-    toast.add({ title: 'Auth exchange failed', description: e.message ?? String(e), color: 'error', icon: 'i-lucide-alert-triangle' })
+    // In some cases the SDK may have already exchanged the code automatically
+    const { data: afterData } = await supabase.auth.getSession()
+    if (afterData?.session) {
+      toast.add({ title: 'Signed in', description: 'Your account is confirmed. Welcome!', color: 'success', icon: 'i-lucide-badge-check' })
+      return navigateTo('/')
+    }
+
+    console.error('Auth exchange failed:', e)
+    toast.add({ title: 'Auth exchange failed', description: e?.message ?? String(e), color: 'error', icon: 'i-lucide-alert-triangle' })
     navigateTo('/auth')
   }
 })
