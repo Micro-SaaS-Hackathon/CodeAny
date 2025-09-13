@@ -23,338 +23,275 @@ async function onTryDemo() {
   }
 }
 
-async function onJoinWaitlist() {
-  toast.add({
-    title: 'Added to waitlist',
-    description: 'We\'ll notify you as soon as the beta is ready.',
-    icon: 'i-lucide-mail-check',
-    color: 'primary'
-  })
-}
-
-const faqs = [
-  {
-    label: 'How does the holiday-aware schedule work?',
-    content: 'We ingest national/academic calendars and auto-shift due dates. You can override any date inline with one click.'
-  },
-  {
-    label: 'Which LMS are supported?',
-    content: 'Export a .zip file and import it into Blackboard, Moodle, Canvas (Instructure), Open edX, Absorb LMS, TalentLMS and other compatible platforms.'
-  },
-  {
-    label: 'Privacy and data handling?',
-    content: 'Your content stays in your workspace. We do not train on your data. See Privacy for details.'
+const subscribeEmail = ref('')
+function onSubscribe() {
+  const email = subscribeEmail.value?.trim()
+  if (!email || !email.includes('@')) {
+    toast.add({ title: 'Enter a valid email', color: 'warning', icon: 'i-lucide-alert-circle' })
+    return
   }
-] as const
+  toast.add({
+    title: 'Subscribed',
+    description: "We'll send product updates and launch news.",
+    color: 'primary',
+    icon: 'i-lucide-mail-check'
+  })
+  subscribeEmail.value = ''
+}
 </script>
 
 <template>
-  <main id="main" class="bg-default text-default">
-    <!-- Skip link for accessibility -->
-    <a href="#content" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 bg-inverted text-inverted rounded-md px-3 py-2">Skip to content</a>
-
-    <!-- Header -->
-    <nav class="sticky top-0 z-40 bg-white/70 dark:bg-white/70 backdrop-blur border-b border-default">
+  <div class="min-h-screen bg-default text-default flex flex-col">
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-default/80 backdrop-blur border-b border-default">
       <UContainer class="py-3">
-        <div class="flex items-center justify-between gap-3">
-          <NuxtLink to="/" class="flex items-center gap-2 focus:outline-none" aria-label="Cursly home">
+        <div class="flex items-center justify-between">
+          <NuxtLink to="/" class="flex items-center gap-2">
             <img src="~/assets/images/cursly-logo-small.png" alt="Cursly logo" class="h-7 w-auto" />
             <span class="font-semibold text-highlighted">Cursly</span>
           </NuxtLink>
-          <div class="hidden md:flex items-center gap-4">
-            <NuxtLink to="#content" class="text-toned hover:text-highlighted">Features</NuxtLink>
-            <NuxtLink to="#how-it-works" class="text-toned hover:text-highlighted">How it works</NuxtLink>
-            <NuxtLink to="#teach-with-cursly" class="text-toned hover:text-highlighted">Teach</NuxtLink>
-            <NuxtLink to="#import-guide" class="text-toned hover:text-highlighted">Import</NuxtLink>
+          <div class="hidden md:flex items-center gap-6">
+            <NuxtLink to="#features" class="text-toned hover:text-highlighted transition-colors">Features</NuxtLink>
+            <NuxtLink to="#why-cursly" class="text-toned hover:text-highlighted transition-colors">Why</NuxtLink>
+            <NuxtLink to="#how-it-works" class="text-toned hover:text-highlighted transition-colors">How it works</NuxtLink>
           </div>
-          <div class="flex items-center gap-2">
-            <UButton label="Try Demo" color="primary" icon="i-lucide-rocket" @click="onTryDemo" aria-label="Try demo" />
-            <UButton to="#teach-with-cursly" variant="outline" label="Join Students" aria-label="Join students" />
-            <UButton to="/auth" variant="link" color="neutral" label="Sign in" aria-label="Sign in" />
-          </div>
+          <UButton to="/auth" color="primary" label="Get Started" />
         </div>
       </UContainer>
     </nav>
 
-    <!-- Hero -->
+    <!-- Hero Section -->
     <section class="bg-hero border-b border-default">
-      <UContainer class="py-14">
-        <div class="max-w-3xl">
-          <h1 class="text-h1 mb-3 text-highlighted">Cursly: Build a complete, AI-powered course, intelligently enriched with real-world data, in minutes.</h1>
-          <p class="text-muted mb-6">
-            Tell us what you want to teach—Cursly turns your ideas into ready‑to‑edit lessons, activities, and assessments. Start fast, keep full control.
+      <UContainer class="py-16 lg:py-24">
+        <div class="text-center max-w-4xl mx-auto">
+          <h1 class="text-4xl md:text-6xl lg:text-7xl font-bold text-highlighted mb-6">
+            Cursly
+          </h1>
+          <p class="text-xl md:text-2xl text-muted mb-8 max-w-3xl mx-auto">
+            Build courses in minutes
           </p>
-          <div class="flex flex-wrap items-center gap-3">
+          <p class="text-lg text-muted mb-8 max-w-2xl mx-auto">
+            Get a ready‑to‑edit generated Course with <strong>generated modules, videos, pictures</strong>, <strong>generated quiz questions</strong>, and <strong>generated assignments with rubrics</strong>. <br></br> Export a <strong>Course</strong> for <strong>Moodle/Canvas/Blackboard</strong>. 
+          </p>
+          <div class="flex flex-wrap justify-center gap-4 mb-12">
             <UButton
               label="Try Demo"
               color="primary"
               :loading="isGenerating"
               :loading-auto="true"
               icon="i-lucide-rocket"
-              size="lg"
-              aria-label="Try live demo"
+              size="xl"
               @click="onTryDemo"
             />
             <UButton
-              label="Join Waitlist"
+              label="See Sample Course"
               color="neutral"
               variant="outline"
-              icon="i-lucide-mail-plus"
-              size="lg"
-              aria-label="Join the waitlist"
-              @click="onJoinWaitlist"
-            />
-            <UButton
-              label="See how it works"
-              color="neutral"
-              variant="link"
-              to="#how-it-works"
-              aria-label="Scroll to how it works"
+              icon="i-lucide-file-text"
+              size="xl"
             />
           </div>
-          <div class="mt-4 flex items-center gap-2 text-dimmed">
-            <UBadge color="success" variant="soft" :label="'No-code builder'" aria-label="No-code builder" />
-            <UBadge color="warning" variant="soft" :label="'Edit before publishing'" aria-label="Edit before publishing" />
+          
+          <!-- Product visual -->
+          <div class="relative max-w-4xl mx-auto">
+            <div class="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 rounded-2xl"></div>
+            <UCard class="relative overflow-hidden border-0 shadow-2xl">
+              <div class="bg-gradient-to-br from-primary/5 to-white dark:to-gray-900 p-6">
+                <USkeleton class="h-56 w-full rounded-xl" />
+              </div>
+            </UCard>
           </div>
         </div>
       </UContainer>
     </section>
 
-    <section id="content">
-      <UContainer class="py-12">
-        <!-- Key features -->
-        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <UCard variant="subtle" class="h-full" aria-labelledby="feat-1">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-layout-dashboard" class="text-primary" aria-hidden="true" />
-                <h2 id="feat-1" class="text-h3 text-highlighted">Creator hub</h2>
-              </div>
-            </template>
-            <p class="text-muted">One place to set preferences and manage all your courses.</p>
-          </UCard>
-          <UCard variant="subtle" class="h-full" aria-labelledby="feat-2">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-brain-circuit" class="text-primary" aria-hidden="true" />
-                <h2 id="feat-2" class="text-h3 text-highlighted">AI course builder</h2>
-              </div>
-            </template>
-            <p class="text-muted">Auto‑generates syllabus, content, quizzes, assignments and grading.</p>
-          </UCard>
-          <UCard variant="subtle" class="h-full" aria-labelledby="feat-3">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-video" class="text-primary" aria-hidden="true" />
-                <h2 id="feat-3" class="text-h3 text-highlighted">Full learning flow</h2>
-              </div>
-            </template>
-            <p class="text-muted">Videos (generated/uploaded), assignments and proctored assessments.</p>
-          </UCard>
-          <UCard variant="subtle" class="h-full" aria-labelledby="feat-4">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-pencil" class="text-primary" aria-hidden="true" />
-                <h2 id="feat-4" class="text-h3 text-highlighted">Editing control</h2>
-              </div>
-            </template>
-            <p class="text-muted">Review and tweak everything before you publish.</p>
-          </UCard>
-          <UCard variant="subtle" class="h-full" aria-labelledby="feat-5">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-plug" class="text-primary" aria-hidden="true" />
-                <h2 id="feat-5" class="text-h3 text-highlighted">Integrations</h2>
-              </div>
-            </template>
-            <p class="text-muted">Export as a .zip file. Import into Blackboard, Moodle, Canvas (Instructure), Open edX, Absorb LMS, TalentLMS and more.</p>
-          </UCard>
+    <!-- Unique Value (moved up for visibility) -->
+    <section id="why-cursly" class="scroll-mt-24 bg-gray-50 dark:bg-gray-900/50 border-b border-default">
+      <UContainer class="py-16">
+        <p class="text-primary font-medium text-center">Why Cursly</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-highlighted text-center mt-2">Unique advantages you won’t get elsewhere</h2>
+        <p class="text-muted text-center max-w-3xl mx-auto mt-3">Cursly is built for educators who need results fast without sacrificing quality.</p>
+        <div class="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <UIcon name="i-lucide-calendar-range" class="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p class="font-semibold">Holiday-aware by default</p>
+              <p class="text-muted text-sm">Schedules respect national/academic holidays automatically.</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <UIcon name="i-lucide-file-text" class="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p class="font-semibold">Notion/Markdown ingestion</p>
+              <p class="text-muted text-sm">Turn your existing notes into a structured Course Pack.</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <UIcon name="i-lucide-archive" class="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p class="font-semibold">LMS‑ready export</p>
+              <p class="text-muted text-sm">One‑click ZIP for Moodle, Canvas, Blackboard and more.</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <UIcon name="i-lucide-shield-check" class="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p class="font-semibold">Privacy‑first</p>
+              <p class="text-muted text-sm">Your content stays yours. We don’t train on your data.</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <UIcon name="i-lucide-badge-check" class="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p class="font-semibold">Assessment quality</p>
+              <p class="text-muted text-sm">Rubric‑backed assignments and 18+ quiz questions per course.</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <UIcon name="i-lucide-users" class="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p class="font-semibold">Teach or export</p>
+              <p class="text-muted text-sm">Run classes in Cursly with enrollment and proctoring—or export.</p>
+            </div>
+          </div>
         </div>
+      </UContainer>
+    </section>
 
-        <!-- How it works -->
-        <div id="how-it-works" class="mt-12 grid md:grid-cols-3 gap-4" aria-label="How it works">
-          <UCard variant="outline" class="h-full">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UBadge label="Step 1" color="primary" variant="soft" />
-                <h3 class="text-h3 text-highlighted">Set your preferences</h3>
-              </div>
-            </template>
-            <div class="space-y-3">
-              <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-sliders" class="text-muted" aria-hidden="true" />
-                <span class="text-toned">Course type, topics, grading, video needs</span>
-                <UButton color="neutral" size="xs" variant="outline" class="ml-auto" aria-label="Use suggested settings">Use suggested</UButton>
-              </div>
-              <USkeleton class="h-20 w-full rounded-md" />
-            </div>
-          </UCard>
+    <!-- Features Section -->
+    <section id="features" class="scroll-mt-24 bg-gray-50 dark:bg-gray-900/50 border-b border-default">
+      <UContainer class="py-16">
+        <p class="text-primary font-medium text-center">Core Features</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-highlighted text-center mt-2">Everything you need to create professional courses</h2>
+        <p class="text-muted text-center max-w-3xl mx-auto mt-3">From AI‑generated content to LMS integration, Cursly handles the heavy lifting so you can focus on teaching.</p>
 
-          <UCard variant="outline" class="h-full">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UBadge label="Step 2" color="primary" variant="soft" />
-                <h3 class="text-h3 text-highlighted">Cursly generates</h3>
-              </div>
-            </template>
-            <div class="space-y-3">
-              <USkeleton v-if="isGenerating" class="h-24 w-full rounded-md" />
-              <div v-else class="space-y-2">
-                <div class="flex items-center gap-2">
-                  <UIcon name="i-lucide-list-tree" class="text-muted" aria-hidden="true" />
-                  <span class="text-toned">Syllabus + content</span>
-                  <UBadge label="quizzes/exams" color="info" variant="soft" class="ml-auto" />
-                </div>
-                <div class="flex items-center gap-2">
-                  <UIcon name="i-lucide-clipboard-list" class="text-success" aria-hidden="true" />
-                  <span class="text-toned">Assignments + rubrics</span>
-                  <UBadge label="videos" color="success" variant="soft" class="ml-auto" />
-                </div>
-              </div>
+        <div class="mt-10 grid md:grid-cols-3 gap-6">
+          <div class="p-5 rounded-xl border border-default bg-elevated">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+              <UIcon name="i-lucide-brain-circuit" class="w-5 h-5 text-primary" />
             </div>
-          </UCard>
-
-          <UCard variant="outline" class="h-full">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UBadge label="Step 3" color="primary" variant="soft" />
-                <h3 class="text-h3 text-highlighted">Edit & publish</h3>
-              </div>
-            </template>
-            <div class="space-y-3">
-              <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-pencil" class="text-muted" aria-hidden="true" />
-                <span class="text-toned">Tweak anything, invite students</span>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <UButton label="Download .zip" color="primary" variant="subtle" size="sm" aria-label="Download course as zip file" title="Downloads a .zip file you can import into your LMS" />
-                <UButton to="#import-guide" variant="link" color="neutral" size="sm" label="How to import" aria-label="Scroll to import guide" />
-              </div>
+            <p class="font-semibold">AI Course Generation</p>
+            <p class="text-sm text-muted mt-1">Generate course outlines, lessons, quizzes, and assignments with rubrics in minutes.</p>
+          </div>
+          <div class="p-5 rounded-xl border border-default bg-elevated">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+              <UIcon name="i-lucide-calendar-clock" class="w-5 h-5 text-primary" />
             </div>
-          </UCard>
+            <p class="font-semibold">Smart Scheduling</p>
+            <p class="text-sm text-muted mt-1">Holiday‑aware scheduling using national and academic calendars.</p>
+          </div>
+          <div class="p-5 rounded-xl border border-default bg-elevated">
+            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+              <UIcon name="i-lucide-download" class="w-5 h-5 text-primary" />
+            </div>
+            <p class="font-semibold">Universal Export</p>
+            <p class="text-sm text-muted mt-1">Export ZIP files compatible with Moodle, Canvas, Blackboard, and more.</p>
+          </div>
         </div>
+      </UContainer>
+    </section>
 
-        <!-- Integrations -->
-        <div class="mt-12">
-          <UCard variant="subtle">
-            <template #header>
-              <h3 class="text-h3 text-highlighted">Integrations</h3>
-            </template>
-            <div class="flex flex-wrap items-center gap-2">
-              <UBadge color="neutral" variant="soft" label="Blackboard" />
-              <UBadge color="neutral" variant="soft" label="Moodle" />
-              <UBadge color="neutral" variant="soft" label="Canvas (Instructure)" />
-              <UBadge color="neutral" variant="soft" label="Open edX" />
-              <UBadge color="neutral" variant="soft" label="Absorb LMS" />
-              <UBadge color="neutral" variant="soft" label="TalentLMS" />
-              <span class="text-muted ml-2">Export as a .zip file and import into these platforms and more.</span>
-            </div>
-          </UCard>
+    <!-- How it Works -->
+    <section id="how-it-works" class="scroll-mt-24">
+      <UContainer class="py-16">
+        <p class="text-primary font-medium text-center">Simple Process</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-highlighted text-center mt-2">From idea to published course in 3 steps</h2>
+        <p class="text-muted text-center max-w-3xl mx-auto mt-3">Our streamlined workflow gets you from concept to classroom-ready content faster than ever.</p>
+        <div class="mt-8">
+          <UStepper
+            class="w-full mx-auto max-w-5xl"
+            size="lg"
+            :items="[
+              { icon: 'i-lucide-settings', title: 'Set Preferences', description: 'Tell us your course topic, target audience, duration, and learning objectives.' },
+              { icon: 'i-lucide-sparkles', title: 'AI Generates', description: 'Cursly creates modules, quizzes, assignments, and a holiday-aware schedule.' },
+              { icon: 'i-lucide-rocket', title: 'Launch', description: 'Edit anything, then export to your LMS.' }
+            ]"
+          />
         </div>
+      </UContainer>
+    </section>
 
-        <!-- How to import -->
-        <div id="import-guide" class="mt-12">
-          <UCard variant="subtle">
-            <template #header>
-              <h3 class="text-h3 text-highlighted">How to import your course</h3>
-            </template>
-            <div class="grid md:grid-cols-3 gap-4">
-              <UCard variant="outline" aria-labelledby="how-bb">
-                <template #header>
-                  <h4 id="how-bb" class="text-h3 text-highlighted">Blackboard</h4>
-                </template>
-                <ol class="list-decimal pl-6 text-toned space-y-1">
-                  <li>Open your course and go to Content.</li>
-                  <li>Choose “Build Content” &gt; “Content Package”.</li>
-                  <li>Upload the .zip you downloaded from Cursly.</li>
-                  <li>Submit and adjust options if needed.</li>
-                </ol>
-              </UCard>
-              <UCard variant="outline" aria-labelledby="how-moodle">
-                <template #header>
-                  <h4 id="how-moodle" class="text-h3 text-highlighted">Moodle</h4>
-                </template>
-                <ol class="list-decimal pl-6 text-toned space-y-1">
-                  <li>Open your course and turn editing on.</li>
-                  <li>Click “Add an activity or resource”.</li>
-                  <li>Upload the .zip from Cursly and save.</li>
-                  <li>Adjust attempts and display options as needed.</li>
-                </ol>
-              </UCard>
-              <UCard variant="outline" aria-labelledby="how-canvas">
-                <template #header>
-                  <h4 id="how-canvas" class="text-h3 text-highlighted">Canvas (Instructure)</h4>
-                </template>
-                <ol class="list-decimal pl-6 text-toned space-y-1">
-                  <li>Go to Course &gt; Settings &gt; “Import Course Content”.</li>
-                  <li>Select your .zip from Cursly and start the import.</li>
-                  <li>Place the imported module in the course and publish.</li>
-                </ol>
-              </UCard>
-            </div>
-            <p class="text-muted mt-4">Note: menu labels vary by LMS version; look for “Import”, “Content Package” or similar. You’ll use the .zip you downloaded from Cursly.</p>
-          </UCard>
-        </div>
-
-        <!-- Teach with Cursly -->
-        <div id="teach-with-cursly" class="mt-12">
-          <UCard variant="subtle">
-            <template #header>
-              <h3 class="text-h3 text-highlighted">Run your classes in Cursly</h3>
-            </template>
-            <div class="grid md:grid-cols-4 gap-4">
-              <UCard variant="outline" aria-labelledby="teach-enroll">
-                <template #header>
-                  <h4 id="teach-enroll" class="text-h3 text-highlighted">Easy enrollment</h4>
-                </template>
-                <p class="text-muted">Invite learners by shareable URL or email invitation. Self‑serve registration is frictionless.</p>
-              </UCard>
-              <UCard variant="outline" aria-labelledby="teach-proctor">
-                <template #header>
-                  <h4 id="teach-proctor" class="text-h3 text-highlighted">Proctored quizzes</h4>
-                </template>
-                <p class="text-muted">Organize quizzes and exams with built‑in proctoring controls to protect assessment integrity.</p>
-              </UCard>
-              <UCard variant="outline" aria-labelledby="teach-lti">
-                <template #header>
-                  <h4 id="teach-lti" class="text-h3 text-highlighted">Use with your LMS</h4>
-                </template>
-                <p class="text-muted">Prefer your existing LMS? Download a .zip and import it to your LMS.</p>
-              </UCard>
-              <UCard variant="outline" aria-labelledby="teach-motivate">
-                <template #header>
-                  <h4 id="teach-motivate" class="text-h3 text-highlighted">Motivate learners</h4>
-                </template>
-                <p class="text-muted">Leaderboards and achievement badges keep students engaged and rewarded throughout the course.</p>
-              </UCard>
-            </div>
-          </UCard>
-        </div>
-
-        <!-- FAQs -->
-        <div class="mt-12">
-          <h3 class="text-h2 text-highlighted mb-2">FAQs</h3>
-          <UAccordion :items="[
-            { label: 'What does Cursly generate?', content: 'A complete course: syllabus & content, quizzes/exams, assignments with rubrics, grading scheme, and videos (generated or uploaded).' },
-            { label: 'Can I edit before publishing?', content: 'Yes. You have full control to review and tweak everything before publishing or inviting learners.' },
-            { label: 'How do I export or use it with my LMS?', content: 'Download a .zip file and import it into Blackboard, Moodle, Canvas (Instructure), Open edX, Absorb LMS, TalentLMS and more.' }
-          ]" />
+    <!-- CTA Section -->
+    <section class="scroll-mt-24 bg-gradient-to-r from-primary/5 to-primary/10">
+      <UContainer class="py-12 text-center">
+        <h2 class="text-2xl md:text-3xl font-bold text-highlighted">Ready to transform your teaching?</h2>
+        <p class="text-muted mt-2 max-w-2xl mx-auto">Join educators who've already discovered the power of AI‑assisted course creation.</p>
+        <div class="mt-6 flex flex-wrap justify-center gap-3">
+          <UButton to="/auth" size="xl" color="primary" label="Start Creating" />
+          <UButton size="xl" color="neutral" variant="outline" icon="i-lucide-play" label="Watch Demo" />
         </div>
       </UContainer>
     </section>
 
     <!-- Footer -->
-    <footer class="border-t border-default">
-      <UContainer class="py-8">
-        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <p class="text-muted">Questions? <a href="mailto:curslyapp@gmail.com" class="text-primary underline focus:outline-none">curslyapp@gmail.com</a></p>
-          <div class="flex items-center gap-3 text-dimmed">
-            <NuxtLink to="/privacy" class="underline" aria-label="Privacy policy">Privacy</NuxtLink>
-            <span aria-hidden="true">•</span>
-            <span>© {{ new Date().getFullYear() }} Cursly</span>
+    <footer class="mt-auto border-t border-default">
+      <UContainer class="py-12 grid gap-10 md:grid-cols-3">
+        <div class="flex items-start gap-3">
+          <img src="~/assets/images/cursly-logo-small.png" alt="Cursly logo" class="h-6 w-auto mt-1" />
+          <div>
+            <p class="font-semibold">Cursly</p>
+            <p class="text-sm text-muted max-w-xs">AI course builder for educators and teams. Generate complete, LMS‑ready courses in minutes.</p>
           </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-8">
+          <div>
+            <p class="font-semibold mb-2">Product</p>
+            <ul class="space-y-1 text-sm">
+              <li><NuxtLink to="#features" class="text-toned hover:text-highlighted">Features</NuxtLink></li>
+              <li><NuxtLink to="#how-it-works" class="text-toned hover:text-highlighted">How it works</NuxtLink></li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-semibold mb-2">Resources</p>
+            <ul class="space-y-1 text-sm">
+              <li><NuxtLink to="#how-it-works" class="text-toned hover:text-highlighted">Import guide</NuxtLink></li>
+              <li><a href="mailto:curslyapp@gmail.com" class="text-toned hover:text-highlighted">Contact</a></li>
+              <li><a href="#" class="text-toned hover:text-highlighted">Changelog</a></li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-semibold mb-2">Company</p>
+            <ul class="space-y-1 text-sm">
+              <li><a href="#" class="text-toned hover:text-highlighted">About</a></li>
+              <li><a href="#" class="text-toned hover:text-highlighted">Careers</a></li>
+              <li><a href="#" class="text-toned hover:text-highlighted">Press</a></li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-semibold mb-2">Legal</p>
+            <ul class="space-y-1 text-sm">
+              <li><NuxtLink to="/privacy" class="text-toned hover:text-highlighted">Privacy</NuxtLink></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="space-y-3 w-full max-w-sm">
+          <p class="text-sm text-muted">Get product updates</p>
+          <form class="flex items-center gap-2" @submit.prevent="onSubscribe">
+            <UInput v-model="subscribeEmail" placeholder="you@school.edu" type="email" class="flex-1" />
+            <UButton type="submit" color="primary" label="Subscribe" />
+          </form>
+          <div class="flex items-center gap-3 text-dimmed">
+            <a href="https://x.com/" target="_blank" aria-label="X / Twitter" class="hover:text-highlighted"><UIcon name="i-lucide-twitter" /></a>
+            <a href="https://www.linkedin.com/" target="_blank" aria-label="LinkedIn" class="hover:text-highlighted"><UIcon name="i-lucide-linkedin" /></a>
+            <a href="https://github.com/" target="_blank" aria-label="GitHub" class="hover:text-highlighted"><UIcon name="i-lucide-github" /></a>
+          </div>
+          <p class="text-xs text-dimmed">© {{ new Date().getFullYear() }} Cursly. All rights reserved.</p>
         </div>
       </UContainer>
     </footer>
-  </main>
+  </div>
 </template>
