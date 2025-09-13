@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRoute } from '#app'
 import { useSupabaseUser } from '#imports'
 import CreateCourseModal from '~/components/CreateCourseModal.vue'
+import { useCreateCourseModal } from '~/composables/useCreateCourseModal'
 
 const q = ref('')
 const user = useSupabaseUser()
@@ -17,8 +18,8 @@ const route = useRoute()
 const isDashboard = computed(() => route.path.startsWith('/app/dashboard'))
 const isCourses = computed(() => route.path.startsWith('/app/courses'))
 
-// Local control for Create Course modal
-const showCreateCourse = ref(false)
+// Global control for Create Course modal (shared via composable)
+const { isOpen: showCreateCourse, open: openCreateCourse } = useCreateCourseModal()
 </script>
 
 <template>
@@ -30,11 +31,11 @@ const showCreateCourse = ref(false)
           <img src="~/assets/images/cursly-logo-small.png" alt="Cursly" class="h-6 w-auto" />
           <span class="font-semibold">Teacher Hub</span>
         </NuxtLink>
-        <div class="flex-1 min-w-0 px-2">
+        <div class="flex-1 min-w-0 px-2 hidden sm:block">
           <UInput v-model="q" placeholder="Search…" icon="i-lucide-search" class="w-full max-w-xl" size="lg" />
         </div>
-        <div class="flex items-center gap-3 shrink-0">
-          <UButton color="primary" icon="i-lucide-plus" label="Create Course" @click="showCreateCourse = true" />
+        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+          <UButton color="primary" icon="i-lucide-plus" label="Create Course" class="sm:px-4" @click="openCreateCourse()" />
           <!-- Avoid SSR hydration differences by rendering avatar on client only -->
           <ClientOnly>
             <template #fallback>
@@ -56,8 +57,8 @@ const showCreateCourse = ref(false)
     </header>
 
     <!-- Body with slim sidebar -->
-    <div class="grid grid-cols-[220px_1fr]">
-      <aside class="border-r border-default min-h-[calc(100vh-3.5rem)]">
+    <div class="grid grid-cols-1 lg:grid-cols-[220px_1fr]">
+      <aside class="border-r border-default min-h-[calc(100vh-3.5rem)] hidden lg:block">
         <nav class="p-2 space-y-1">
           <NuxtLink
             to="/app/dashboard"
@@ -81,7 +82,7 @@ const showCreateCourse = ref(false)
           </NuxtLink>
         </nav>
       </aside>
-      <main class="p-4 lg:p-6">
+      <main class="p-2 sm:p-4 lg:p-6">
         <slot />
       </main>
     </div>

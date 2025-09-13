@@ -47,12 +47,60 @@ export function useCourses() {
   async function fetchCategories(): Promise<{ label: string; value: string }[]> {
     const url = 'https://admin.opendata.az/api/3/action/package_show?id=bakalavriat-seviyyesi-uzre-ixtisaslar'
     try {
-      const data = await fetch(url).then(r => { if (!r.ok) throw new Error('Network response was not ok ' + r.statusText); return r.json() })
-      const items: any[] = data?.result?.resources || []
-      return items.map((r: any) => ({ label: r.name || r.id, value: r.id }))
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error('Network response was not ok ' + response.statusText)
+      }
+      const data = await response.json()
+      
+      // Extract categories from the CSV resource
+      const csvResource = data?.result?.resources?.find((r: any) => r.format === 'CSV')
+      if (csvResource?.url) {
+        // Fetch the CSV data
+        const csvResponse = await fetch(csvResource.url)
+        const csvText = await csvResponse.text()
+        
+        // Parse CSV and extract unique specializations
+        const lines = csvText.split('\n').slice(1) // Skip header
+        const categories = new Set<string>()
+        
+        lines.forEach(line => {
+          const columns = line.split(',')
+          if (columns.length > 1 && columns[1]?.trim()) {
+            categories.add(columns[1].trim().replace(/"/g, ''))
+          }
+        })
+        
+        return Array.from(categories)
+          .filter(Boolean)
+          .sort()
+          .map(cat => ({ label: cat, value: cat }))
+      }
+      
+      // Fallback to basic categories if CSV parsing fails
+      return [
+        { label: 'Computer Science', value: 'computer-science' },
+        { label: 'Mathematics', value: 'mathematics' },
+        { label: 'Engineering', value: 'engineering' },
+        { label: 'Business', value: 'business' },
+        { label: 'Arts & Humanities', value: 'arts-humanities' },
+        { label: 'Natural Sciences', value: 'natural-sciences' },
+        { label: 'Social Sciences', value: 'social-sciences' },
+        { label: 'Medicine & Health', value: 'medicine-health' }
+      ]
     } catch (err) {
       console.error('Error fetching categories:', err)
-      return []
+      // Return fallback categories
+      return [
+        { label: 'Computer Science', value: 'computer-science' },
+        { label: 'Mathematics', value: 'mathematics' },
+        { label: 'Engineering', value: 'engineering' },
+        { label: 'Business', value: 'business' },
+        { label: 'Arts & Humanities', value: 'arts-humanities' },
+        { label: 'Natural Sciences', value: 'natural-sciences' },
+        { label: 'Social Sciences', value: 'social-sciences' },
+        { label: 'Medicine & Health', value: 'medicine-health' }
+      ]
     }
   }
 

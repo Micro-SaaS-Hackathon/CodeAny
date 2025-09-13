@@ -47,9 +47,9 @@ onUnmounted(() => { stopPoll && stopPoll() })
 </script>
 
 <template>
-  <div class="p-4 lg:p-6 space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-h3 font-semibold text-highlighted">Courses</h1>
+  <div class="p-2 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+      <h1 class="text-xl sm:text-2xl lg:text-h3 font-semibold text-highlighted">Courses</h1>
     </div>
 
     <!-- Empty state / CTA -->
@@ -84,31 +84,31 @@ onUnmounted(() => { stopPoll && stopPoll() })
           <USkeleton class="h-10 w-full" />
           <USkeleton class="h-10 w-full" />
         </div>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full text-sm">
+        <div v-else class="overflow-x-auto -mx-2 sm:mx-0">
+          <table class="min-w-full text-xs sm:text-sm">
             <thead>
               <tr class="text-left text-dimmed">
-                <th class="px-3 py-2">Title</th>
-                <th class="px-3 py-2">Progress</th>
-                <th class="px-3 py-2">Status</th>
-                <th class="px-3 py-2">Created</th>
-                <th class="px-3 py-2">Updated</th>
+                <th class="px-2 sm:px-3 py-2">Title</th>
+                <th class="px-2 sm:px-3 py-2 hidden sm:table-cell">Progress</th>
+                <th class="px-2 sm:px-3 py-2">Status</th>
+                <th class="px-2 sm:px-3 py-2 hidden md:table-cell">Created</th>
+                <th class="px-2 sm:px-3 py-2 hidden lg:table-cell">Updated</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in courses" :key="row.id" class="border-t border-default">
-                <td class="px-3 py-2 font-medium">{{ row.title }}</td>
-                <td class="px-3 py-2">
-                  <div class="flex items-center gap-3 w-56">
+                <td class="px-2 sm:px-3 py-2 font-medium truncate max-w-32 sm:max-w-none">{{ row.title }}</td>
+                <td class="px-2 sm:px-3 py-2 hidden sm:table-cell">
+                  <div class="flex items-center gap-2 sm:gap-3 w-32 sm:w-56">
                     <UProgress :value="row.progress" class="flex-1" />
-                    <span class="text-sm text-toned w-10 text-right">{{ row.progress }}%</span>
+                    <span class="text-xs sm:text-sm text-toned w-8 sm:w-10 text-right">{{ row.progress }}%</span>
                   </div>
                 </td>
-                <td class="px-3 py-2">
-                  <UBadge :color="row.status === 'ready' || row.status === 'published' ? 'green' : (row.status === 'failed' ? 'red' : 'gray')" :label="row.status" />
+                <td class="px-2 sm:px-3 py-2">
+                  <UBadge :color="row.status === 'ready' || row.status === 'published' ? 'green' : (row.status === 'failed' ? 'red' : 'gray')" :label="row.status" size="xs" class="sm:text-sm" />
                 </td>
-                <td class="px-3 py-2">{{ fmt(row.created_at) }}</td>
-                <td class="px-3 py-2">{{ fmt(row.updated_at) }}</td>
+                <td class="px-2 sm:px-3 py-2 hidden md:table-cell text-xs sm:text-sm">{{ fmt(row.created_at) }}</td>
+                <td class="px-2 sm:px-3 py-2 hidden lg:table-cell text-xs sm:text-sm">{{ fmt(row.updated_at) }}</td>
               </tr>
             </tbody>
           </table>

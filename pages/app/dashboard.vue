@@ -24,9 +24,9 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="p-4 lg:p-6 space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-h3 font-semibold text-highlighted">Dashboard</h1>
+  <div class="p-2 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+      <h1 class="text-xl sm:text-2xl lg:text-h3 font-semibold text-highlighted">Dashboard</h1>
     </div>
 
     <!-- Welcome / CTA -->
@@ -40,24 +40,24 @@ onMounted(load)
     </UCard>
 
     <!-- Stats cards -->
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
       <UCard>
-        <p class="text-dimmed text-sm">Total courses</p>
-        <div class="text-3xl font-bold mt-1">
+        <p class="text-dimmed text-xs sm:text-sm">Total courses</p>
+        <div class="text-2xl sm:text-3xl font-bold mt-1">
           <USkeleton v-if="loading" class="h-8 w-16" />
           <span v-else>{{ stats?.total_courses ?? 0 }}</span>
         </div>
       </UCard>
       <UCard>
-        <p class="text-dimmed text-sm">Active teachers</p>
-        <div class="text-3xl font-bold mt-1">
+        <p class="text-dimmed text-xs sm:text-sm">Active teachers</p>
+        <div class="text-2xl sm:text-3xl font-bold mt-1">
           <USkeleton v-if="loading" class="h-8 w-16" />
           <span v-else>{{ stats?.active_teachers ?? 0 }}</span>
         </div>
       </UCard>
       <UCard>
-        <p class="text-dimmed text-sm">Recent activity</p>
-        <div class="text-3xl font-bold mt-1">
+        <p class="text-dimmed text-xs sm:text-sm">Recent activity</p>
+        <div class="text-2xl sm:text-3xl font-bold mt-1">
           <USkeleton v-if="loading" class="h-8 w-24" />
           <span v-else>{{ (stats?.recent_activity?.length || 0) }} events</span>
         </div>
@@ -79,10 +79,10 @@ onMounted(load)
           <USkeleton class="h-4 w-1/3" />
         </div>
         <div v-else-if="!stats?.recent_activity?.length" class="text-muted">No recent activity yet.</div>
-        <div v-else v-for="(a, i) in stats?.recent_activity" :key="i" class="py-3 flex items-center gap-3">
-          <UIcon name="i-lucide-activity" class="text-primary" />
-          <div class="flex-1">
-            <div class="text-sm">Course <span class="font-medium">{{ a.course_id }}</span> <span class="text-toned">{{ a.event }}</span></div>
+        <div v-else v-for="(a, i) in stats?.recent_activity" :key="i" class="py-2 sm:py-3 flex items-center gap-2 sm:gap-3">
+          <UIcon name="i-lucide-activity" class="text-primary flex-shrink-0" />
+          <div class="flex-1 min-w-0">
+            <div class="text-xs sm:text-sm truncate">Course <span class="font-medium">{{ a.course_id }}</span> <span class="text-toned">{{ a.event }}</span></div>
             <div class="text-xs text-dimmed">{{ a.timestamp }}</div>
           </div>
         </div>
