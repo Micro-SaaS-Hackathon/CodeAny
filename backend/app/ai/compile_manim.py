@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from .logging_utils import get_logger
+import time
 
 log = get_logger("compile")
 from typing import Optional
@@ -31,10 +32,12 @@ def _workdir_base() -> Path:
         p = Path(base).expanduser().resolve()
         p.mkdir(parents=True, exist_ok=True)
         return p
-    # Prefer a workspace-local directory under /Users for Docker Desktop file sharing
-    p = Path(os.getcwd()) / "tmp" / "manim_runs"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+    # Default to a user cache path to avoid dev reload loops on repo changes
+    # and to remain under /Users for Docker Desktop file sharing on macOS.
+    # Example: ~/.cache/cursly/manim_runs
+    home_cache = Path.home() / ".cache" / "cursly" / "manim_runs"
+    home_cache.mkdir(parents=True, exist_ok=True)
+    return home_cache
 
 def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
     """Compile Manim code to MP4 via Docker sandbox.
@@ -63,7 +66,7 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
         )
 
     pyfile.write_text(code, encoding="utf-8")
-    log.info(f"Manim compile start | module={module_id} | file={pyfile.name}")
+    log.info(f"Manim compile start | module={module_id} | workdir={str(work)} | file={pyfile.name}")
 
     image = os.getenv("MANIM_DOCKER_IMAGE", "manimcommunity/manim:stable")
     # Ensure image exists before running isolated network
@@ -83,11 +86,14 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
         "manim", "-qL", "-o", mp4_name, f"/manim/{pyfile.name}", "Lesson",
     ]
     try:
+        start = time.time()
+        log.info(f"Manim docker run | module={module_id} | image={image} | cmd={' '.join(cmd)}")
         res = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if res.stdout:
             log.info(f"Manim docker stdout | module={module_id} | preview={res.stdout[:240]}")
         if res.stderr:
             log.info(f"Manim docker stderr | module={module_id} | preview={res.stderr[:240]}")
+        log.info(f"Manim docker done | module={module_id} | took={time.time()-start:.2f}s")
     except subprocess.CalledProcessError as e:
         log.warning(f"Manim compile error | module={module_id} | err={e} | stderr={(e.stderr or '')[:240]}")
         return None
@@ -104,5 +110,5 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
     if alt.exists():
         log.info(f"Manim compile ok | module={module_id} | output={alt}")
         return str(alt)
-    log.warning(f"Manim output not found | module={module_id}")
+    log.warning(f"Manim output not found | module={module_id} | looked=[{out}], alt=[{alt}]")
     return None

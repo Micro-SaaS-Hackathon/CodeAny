@@ -56,11 +56,19 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
     level = state.get("level", "beginner")
     constraints = state.get("constraints", {})
 
+    log.info(f"Graph start | topic={topic} | level={level}")
+    # Detect LangGraph availability up-front to control log severity
+    use_langgraph = True
     try:
-        log.info(f"Graph start | topic={topic} | level={level}")
-        # Prefer LangGraph orchestration if available
         from langgraph.graph import StateGraph, START, END  # type: ignore
         from langgraph.checkpoint.sqlite import SqliteSaver  # type: ignore
+    except Exception as e:
+        use_langgraph = False
+        log.info(f"LangGraph not installed; using asyncio fallback | err={e}")
+
+    if use_langgraph:
+        try:
+            # Prefer LangGraph orchestration if available
 
         def _set(state_in: CourseState) -> CourseState:
             return state_in
@@ -107,15 +115,28 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
 
         async def _compile(state_in: CourseState) -> CourseState:
             mods_dict: Dict[str, ModuleArtifact] = state_in.get("modules", {})  # type: ignore
+            total = max(1, len(mods_dict))
+            done = 0
+            rep = state_in.get("_report")  # type: ignore
+            log.info(f"Compile start | modules={total}")
+
             async def _c(key: str, mart: ModuleArtifact):
                 path = await asyncio.to_thread(compile_manim_to_mp4, mart["module_id"], mart.get("manim_code", ""))
                 mart["video_path"] = path
                 return key, mart
-            log.info(f"Compile start | modules={len(mods_dict)}")
-            items = await asyncio.gather(*[_c(k, v) for k, v in mods_dict.items()])
+
+            tasks = {asyncio.create_task(_c(k, v)): k for k, v in mods_dict.items()}
+            items: List[tuple[str, ModuleArtifact]] = []
+            for task in asyncio.as_completed(tasks):
+                kv = await task
+                items.append(kv)
+                done += 1
+                if rep:
+                    # Map progress linearly from 60 to 80 during compile
+                    pct = 60 + int((done / total) * 20)
+                    rep(pct, f"compiling {done}/{total}")
             log.info(f"Compile done | modules={len(items)}")
             state_in["modules"] = {k: v for k, v in items}  # type: ignore
-            rep = state_in.get("_report")  # type: ignore
             if rep:
                 rep(80, "uploading")
             return state_in
@@ -176,17 +197,20 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
         except Exception:
             checkpointer = None
 
-        graph = builder.compile(checkpointer=checkpointer) if checkpointer else builder.compile()
-        # Inject progress reporter into state
-        state["_report"] = report  # type: ignore
-        out_state: CourseState = await graph.ainvoke(state)  # type: ignore
-        course_package = out_state.get("course_package", {})  # type: ignore
-        report(100, "ready")
-        log.info("Graph done | status=ready")
-        return course_package  # type: ignore
-    except Exception:
-        # Fallback async orchestration without LangGraph if library missing
-        log.warning("LangGraph unavailable; using asyncio fallback")
+            graph = builder.compile(checkpointer=checkpointer) if checkpointer else builder.compile()
+            # Inject progress reporter into state
+            state["_report"] = report  # type: ignore
+            out_state: CourseState = await graph.ainvoke(state)  # type: ignore
+            course_package = out_state.get("course_package", {})  # type: ignore
+            report(100, "ready")
+            log.info("Graph done | status=ready")
+            return course_package  # type: ignore
+        except Exception as e:
+            # If LangGraph is present but orchestration fails, fall back
+            log.warning(f"LangGraph orchestration failed; using asyncio fallback | err={e}")
+
+    # Fallback async orchestration without LangGraph
+    try:
         report(5, "creating")
         syllabus = await generate_syllabus(topic, level, constraints)
         state["syllabus"] = syllabus  # type: ignore
@@ -213,15 +237,25 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
         modules_list = await asyncio.gather(*tasks)
         report(60, "rendering")
 
-        # Compile Manim videos
-        compile_tasks = []
-        for m in modules_list:
-            async def _compile(mart: ModuleArtifact):
-                path = await asyncio.to_thread(compile_manim_to_mp4, mart["module_id"], mart.get("manim_code", ""))
-                mart["video_path"] = path
-                return mart
-            compile_tasks.append(_compile(m))
-        modules_list = await asyncio.gather(*compile_tasks)
+        # Compile Manim videos with incremental progress (60 -> 80)
+        total = max(1, len(modules_list))
+        done = 0
+        log.info(f"Compile start (fallback) | modules={total}")
+
+        async def _compile_one(mart: ModuleArtifact):
+            path = await asyncio.to_thread(compile_manim_to_mp4, mart["module_id"], mart.get("manim_code", ""))
+            mart["video_path"] = path
+            return mart
+
+        tasks = [asyncio.create_task(_compile_one(m)) for m in modules_list]
+        new_list: List[ModuleArtifact] = []
+        for t in asyncio.as_completed(tasks):
+            item = await t
+            new_list.append(item)
+            done += 1
+            pct = 60 + int((done / total) * 20)
+            report(pct, f"compiling {done}/{total}")
+        modules_list = new_list
         report(80, "uploading")
 
     # Persist to Convex or in-memory

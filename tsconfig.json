@@ -1,6 +1,14 @@
 {
   "compilerOptions": {
     "types": ["nuxt", "node", "@nuxt/ui", "@nuxtjs/supabase", "nitropack", "h3"],
-    "strict": true
-  }
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "exclude": [
+    "convex/**",
+    "node_modules",
+    ".nuxt",
+    ".output",
+    "dist"
+  ]
 }

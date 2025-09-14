@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+import logging.handlers
 import os
 from typing import Any, Dict
 
@@ -15,11 +16,23 @@ def _ensure_handler():
     level = getattr(logging, level_str, logging.INFO)
     root = logging.getLogger("cursly.ai")
     root.setLevel(level)
+    fmt = logging.Formatter(fmt="%(asctime)s | %(levelname)s | %(name)s | %(message)s", datefmt="%H:%M:%S")
+    # Console handler
     if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
-        h = logging.StreamHandler()
-        fmt = logging.Formatter(fmt="%(asctime)s | %(levelname)s | %(name)s | %(message)s", datefmt="%H:%M:%S")
-        h.setFormatter(fmt)
-        root.addHandler(h)
+        ch = logging.StreamHandler()
+        ch.setFormatter(fmt)
+        root.addHandler(ch)
+    # File handler (rotating). Path from AI_LOG_FILE or default logs/ai.log
+    log_file = os.getenv("AI_LOG_FILE", "logs/ai.log")
+    try:
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        if not any(isinstance(h, logging.handlers.RotatingFileHandler) for h in root.handlers):
+            fh = logging.handlers.RotatingFileHandler(log_file, maxBytes=5 * 1024 * 1024, backupCount=3)
+            fh.setFormatter(fmt)
+            root.addHandler(fh)
+    except Exception:
+        # If file handler can't be created, continue with console only
+        pass
     _CONFIGURED = True
 
 
@@ -56,4 +69,3 @@ def safe_dict(d: Dict[str, Any]) -> Dict[str, Any]:
         else:
             out[k] = v
     return out
-

@@ -205,10 +205,13 @@ Course object schema:
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
-uvicorn backend.app.main:app --reload --port 8000 --env-file .env
+# Exclude Manim temp output to prevent reload loops during /ai/build
+uvicorn backend.app.main:app --reload --port 8000 --env-file .env --reload-exclude tmp/manim_runs
 ```
 
 Frontend expects `BACKEND_URL` (defaults to `http://localhost:8000`).
+
+Tip: set `MANIM_TMP_DIR` in `.env` to a path outside the repo, e.g. `~/.cache/cursly/manim_runs`, so Manim compiles don’t trigger the dev reload.
 
 ### Connect FastAPI to Convex
 
@@ -223,6 +226,46 @@ Set `CONVEX_URL` in `.env` to your deployment (e.g., `https://abc-123.convex.clo
 If `CONVEX_URL` is not set, the backend falls back to an in‑memory list so you can try the UI immediately.
 
 See `backend/README.md` for detailed examples and curl commands.
+
+### Convex Functions (schema + deploy)
+
+This repo includes a minimal Convex app in `convex/` implementing the functions the backend expects:
+
+- `courses:list` (query)
+- `courses:create` (mutation)
+- `courses:createDetailed` (mutation)
+- `courses:updateProgress` (mutation)
+- `courses:finalize` (mutation)
+- `modules:upsert` (mutation)
+- `stats:get` (query)
+- `files:generateUploadUrl` (action)
+
+Schema is defined in `convex/schema.ts` with `courses` and `modules` tables (and indexes used by functions).
+
+Setup and deploy:
+
+```bash
+# 1) Install dependencies (adds Convex CLI)
+npm install
+
+# 2) Initialize Convex (login/select or create a project)
+npm run convex:dev
+# This starts a local dev server and creates project config; keep it running in another terminal
+
+# 3) Deploy functions & schema to your Convex project
+npm run convex:deploy
+
+# 4) Copy envs and set your deployment URL so the backend can call Convex
+cp sample.env .env
+# Edit .env and set:
+#   CONVEX_URL="https://<your-space>.convex.cloud"
+```
+
+Verify connectivity:
+
+- Start the backend: `uvicorn backend.app.main:app --reload --port 8000 --env-file .env --reload-exclude tmp/manim_runs`
+- Open `GET /convex/diagnostics` — it should show `query_ok: true` and `run_ok: true` once deployed.
+- Try `GET /courses` and `POST /courses` from the UI or curl.
 
 ## Deployment
 

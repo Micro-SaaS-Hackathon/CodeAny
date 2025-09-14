@@ -61,8 +61,11 @@ cp sample.env .env
 4) Run the API
 
 ```bash
-uvicorn backend.app.main:app --reload --port 8000
+# Exclude Manim temp output to prevent reload loops during /ai/build
+uvicorn backend.app.main:app --reload --port 8000 --reload-exclude tmp/manim_runs
 ```
+
+Tip: set `MANIM_TMP_DIR` (in `.env`) to a path outside the repo, e.g. `~/.cache/cursly/manim_runs`, so Manim compiles don’t trigger the dev reload.
 
 ## CORS
 

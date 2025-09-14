@@ -57,6 +57,7 @@ supabase/.temp
 
 # Convex
 convex/.temp
+convex/_generated/
 
 
 #Python
@@ -68,3 +69,4 @@ __pycache__
 
 # Temp
 tmp/manim_runs
+

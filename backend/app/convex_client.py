@@ -12,10 +12,13 @@ class ConvexClient:
     """
 
     def __init__(self, base_url: Optional[str] = None, deploy_key: Optional[str] = None, user_bearer: Optional[str] = None):
-        bu = (base_url or os.getenv('CONVEX_URL') or '').rstrip('/')
+        bu = (base_url or os.getenv('CONVEX_URL') or '').strip().rstrip('/')
         # Normalize accidental '/api' suffix in provided URL
         if bu.endswith('/api'):
             bu = bu[:-4]
+        # Ensure protocol is present; default to https if missing
+        if bu and not (bu.startswith('http://') or bu.startswith('https://')):
+            bu = 'https://' + bu
         self.base_url = bu
         self.deploy_key = deploy_key or os.getenv('CONVEX_DEPLOY_KEY')
         self.user_bearer = user_bearer or os.getenv('CONVEX_USER_BEARER')
