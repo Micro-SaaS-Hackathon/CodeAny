@@ -70,132 +70,132 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
         try:
             # Prefer LangGraph orchestration if available
 
-        def _set(state_in: CourseState) -> CourseState:
-            return state_in
+            def _set(state_in: CourseState) -> CourseState:
+                return state_in
 
-        async def _syll(state_in: CourseState) -> CourseState:
-            rep = state_in.get("_report")  # type: ignore
-            if rep:
-                rep(5, "creating")
-            topic_l = state_in.get("topic", "")
-            level_l = state_in.get("level", "beginner")
-            cons_l = state_in.get("constraints", {})
-            s = await generate_syllabus(topic_l, level_l, cons_l)
-            state_in["syllabus"] = s  # type: ignore
-            if rep:
-                rep(20, "creating")
-            return state_in
-
-        async def _fanout(state_in: CourseState) -> CourseState:
-            specs: List[ModuleSpec] = state_in.get("syllabus", [])  # type: ignore
-            cons_l = state_in.get("constraints", {})
-            lang = cons_l.get("language", "en")
-            async def process(spec: ModuleSpec) -> ModuleArtifact:
-                text, code, gim = await asyncio.gather(
-                    write_text(spec, lang, cons_l),
-                    write_manim_code(spec, lang),
-                    generate_gemini_image_or_fallback(spec, lang, cons_l),
-                )
-                return {
-                    "module_id": spec["id"],
-                    "title": spec["title"],
-                    "outline": spec.get("outline", []),
-                    "text": text,
-                    "manim_code": code,
-                    "gemini_output": gim,
-                }
-            log.info(f"Fanout start | modules={len(specs)}")
-            mods = await asyncio.gather(*[process(s) for s in specs])
-            log.info(f"Fanout done | modules={len(mods)}")
-            state_in["modules"] = {m["module_id"]: m for m in mods}  # type: ignore
-            rep = state_in.get("_report")  # type: ignore
-            if rep:
-                rep(60, "rendering")
-            return state_in
-
-        async def _compile(state_in: CourseState) -> CourseState:
-            mods_dict: Dict[str, ModuleArtifact] = state_in.get("modules", {})  # type: ignore
-            total = max(1, len(mods_dict))
-            done = 0
-            rep = state_in.get("_report")  # type: ignore
-            log.info(f"Compile start | modules={total}")
-
-            async def _c(key: str, mart: ModuleArtifact):
-                path = await asyncio.to_thread(compile_manim_to_mp4, mart["module_id"], mart.get("manim_code", ""))
-                mart["video_path"] = path
-                return key, mart
-
-            tasks = {asyncio.create_task(_c(k, v)): k for k, v in mods_dict.items()}
-            items: List[tuple[str, ModuleArtifact]] = []
-            for task in asyncio.as_completed(tasks):
-                kv = await task
-                items.append(kv)
-                done += 1
+            async def _syll(state_in: CourseState) -> CourseState:
+                rep = state_in.get("_report")  # type: ignore
                 if rep:
-                    # Map progress linearly from 60 to 80 during compile
-                    pct = 60 + int((done / total) * 20)
-                    rep(pct, f"compiling {done}/{total}")
-            log.info(f"Compile done | modules={len(items)}")
-            state_in["modules"] = {k: v for k, v in items}  # type: ignore
-            if rep:
-                rep(80, "uploading")
-            return state_in
+                    rep(5, "creating")
+                topic_l = state_in.get("topic", "")
+                level_l = state_in.get("level", "beginner")
+                cons_l = state_in.get("constraints", {})
+                s = await generate_syllabus(topic_l, level_l, cons_l)
+                state_in["syllabus"] = s  # type: ignore
+                if rep:
+                    rep(20, "creating")
+                return state_in
 
-        async def _persist(state_in: CourseState) -> CourseState:
-            topic_l = state_in.get("topic", "")
-            level_l = state_in.get("level", "")
-            mods_dict: Dict[str, ModuleArtifact] = state_in.get("modules", {})  # type: ignore
-            mods_list = [mods_dict[k] for k in sorted(mods_dict.keys())]
-            cons_l = state_in.get("constraints", {})
-            course_payload = {
-                "topic": topic_l,
-                "level": level_l,
-                "moduleCount": len(mods_list),
-                "moduleIds": [m["module_id"] for m in mods_list],
-                "createdAt": __import__("time").time(),
-                "title": cons_l.get("title"),
-                "description": cons_l.get("description"),
-                "instructor": cons_l.get("instructor"),
-                "audience": cons_l.get("audience"),
-                "levelLabel": cons_l.get("level_label"),
-                "durationWeeks": cons_l.get("duration_weeks"),
-                "category": cons_l.get("category"),
-                "ageRange": cons_l.get("age_range"),
-                "language": cons_l.get("language", "en"),
-                "status": "uploading",
-                "progress": 80,
-            }
-            log.info("Persist start")
-            pr = await persist_course_and_modules(convex=convex, course_payload=course_payload, modules=mods_list, existing_course_id=existing_course_id)
-            log.info("Persist done")
-            state_in["course_package"] = {
-                "topic": topic_l,
-                "level": level_l,
-                "count_modules": len(mods_list),
-                "modules": mods_list,
-                "convex": {"courseId": pr.course_id, "moduleIds": pr.module_ids, "storage": pr.storage_ids},
-            }
-            rep = state_in.get("_report")  # type: ignore
-            if rep:
-                rep(95, "uploading")
-            return state_in
+            async def _fanout(state_in: CourseState) -> CourseState:
+                specs: List[ModuleSpec] = state_in.get("syllabus", [])  # type: ignore
+                cons_l = state_in.get("constraints", {})
+                lang = cons_l.get("language", "en")
+                async def process(spec: ModuleSpec) -> ModuleArtifact:
+                    text, code, gim = await asyncio.gather(
+                        write_text(spec, lang, cons_l),
+                        write_manim_code(spec, lang),
+                        generate_gemini_image_or_fallback(spec, lang, cons_l),
+                    )
+                    return {
+                        "module_id": spec["id"],
+                        "title": spec["title"],
+                        "outline": spec.get("outline", []),
+                        "text": text,
+                        "manim_code": code,
+                        "gemini_output": gim,
+                    }
+                log.info(f"Fanout start | modules={len(specs)}")
+                mods = await asyncio.gather(*[process(s) for s in specs])
+                log.info(f"Fanout done | modules={len(mods)}")
+                state_in["modules"] = {m["module_id"]: m for m in mods}  # type: ignore
+                rep = state_in.get("_report")  # type: ignore
+                if rep:
+                    rep(60, "rendering")
+                return state_in
 
-        builder = StateGraph(CourseState)
-        builder.add_node("syllabus", _syll)
-        builder.add_node("fanout", _fanout)
-        builder.add_node("compile", _compile)
-        builder.add_node("persist", _persist)
-        builder.add_edge(START, "syllabus")
-        builder.add_edge("syllabus", "fanout")
-        builder.add_edge("fanout", "compile")
-        builder.add_edge("compile", "persist")
-        builder.add_edge("persist", END)
+            async def _compile(state_in: CourseState) -> CourseState:
+                mods_dict: Dict[str, ModuleArtifact] = state_in.get("modules", {})  # type: ignore
+                total = max(1, len(mods_dict))
+                done = 0
+                rep = state_in.get("_report")  # type: ignore
+                log.info(f"Compile start | modules={total}")
 
-        checkpointer = None
-        try:
-            checkpointer = SqliteSaver.from_conn_string("ai_state.sqlite")  # type: ignore
-        except Exception:
+                async def _c(key: str, mart: ModuleArtifact):
+                    path = await asyncio.to_thread(compile_manim_to_mp4, mart["module_id"], mart.get("manim_code", ""))
+                    mart["video_path"] = path
+                    return key, mart
+
+                tasks = {asyncio.create_task(_c(k, v)): k for k, v in mods_dict.items()}
+                items: List[tuple[str, ModuleArtifact]] = []
+                for task in asyncio.as_completed(tasks):
+                    kv = await task
+                    items.append(kv)
+                    done += 1
+                    if rep:
+                        # Map progress linearly from 60 to 80 during compile
+                        pct = 60 + int((done / total) * 20)
+                        rep(pct, f"compiling {done}/{total}")
+                log.info(f"Compile done | modules={len(items)}")
+                state_in["modules"] = {k: v for k, v in items}  # type: ignore
+                if rep:
+                    rep(80, "uploading")
+                return state_in
+
+            async def _persist(state_in: CourseState) -> CourseState:
+                topic_l = state_in.get("topic", "")
+                level_l = state_in.get("level", "")
+                mods_dict: Dict[str, ModuleArtifact] = state_in.get("modules", {})  # type: ignore
+                mods_list = [mods_dict[k] for k in sorted(mods_dict.keys())]
+                cons_l = state_in.get("constraints", {})
+                course_payload = {
+                    "topic": topic_l,
+                    "level": level_l,
+                    "moduleCount": len(mods_list),
+                    "moduleIds": [m["module_id"] for m in mods_list],
+                    "createdAt": __import__("time").time(),
+                    "title": cons_l.get("title"),
+                    "description": cons_l.get("description"),
+                    "instructor": cons_l.get("instructor"),
+                    "audience": cons_l.get("audience"),
+                    "levelLabel": cons_l.get("level_label"),
+                    "durationWeeks": cons_l.get("duration_weeks"),
+                    "category": cons_l.get("category"),
+                    "ageRange": cons_l.get("age_range"),
+                    "language": cons_l.get("language", "en"),
+                    "status": "uploading",
+                    "progress": 80,
+                }
+                log.info("Persist start")
+                pr = await persist_course_and_modules(convex=convex, course_payload=course_payload, modules=mods_list, existing_course_id=existing_course_id)
+                log.info("Persist done")
+                state_in["course_package"] = {
+                    "topic": topic_l,
+                    "level": level_l,
+                    "count_modules": len(mods_list),
+                    "modules": mods_list,
+                    "convex": {"courseId": pr.course_id, "moduleIds": pr.module_ids, "storage": pr.storage_ids},
+                }
+                rep = state_in.get("_report")  # type: ignore
+                if rep:
+                    rep(95, "uploading")
+                return state_in
+
+            builder = StateGraph(CourseState)
+            builder.add_node("syllabus", _syll)
+            builder.add_node("fanout", _fanout)
+            builder.add_node("compile", _compile)
+            builder.add_node("persist", _persist)
+            builder.add_edge(START, "syllabus")
+            builder.add_edge("syllabus", "fanout")
+            builder.add_edge("fanout", "compile")
+            builder.add_edge("compile", "persist")
+            builder.add_edge("persist", END)
+
             checkpointer = None
+            try:
+                checkpointer = SqliteSaver.from_conn_string("ai_state.sqlite")  # type: ignore
+            except Exception:
+                checkpointer = None
 
             graph = builder.compile(checkpointer=checkpointer) if checkpointer else builder.compile()
             # Inject progress reporter into state
@@ -257,6 +257,9 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
             report(pct, f"compiling {done}/{total}")
         modules_list = new_list
         report(80, "uploading")
+    except Exception as e:
+        log.error(f"Asyncio fallback orchestration failed | err={e}")
+        raise
 
     # Persist to Convex or in-memory
     course_payload = {

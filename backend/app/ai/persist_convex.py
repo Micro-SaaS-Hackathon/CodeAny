@@ -27,7 +27,8 @@ async def convex_generate_upload_url(convex: ConvexClient) -> Optional[str]:
             return data
         if isinstance(data, dict):
             return data.get("uploadUrl") or data.get("url")
-    except Exception:
+    except Exception as e:
+        log.warning(f"Convex generateUploadUrl failed | err={e}")
         return None
 
 
@@ -40,7 +41,8 @@ async def convex_put_bytes(upload_url: str, data: bytes, content_type: str = "ap
             # Convex returns { storageId: string }
             if isinstance(body, dict):
                 return body.get("storageId") or body.get("storage_id")
-    except Exception:
+    except Exception as e:
+        log.warning(f"Convex upload failed | url={upload_url[:60]}... | err={e}")
         return None
     return None
 
@@ -61,6 +63,7 @@ async def persist_course_and_modules(
     course_id: Optional[str] = None
 
     if convex.enabled:
+        log.info(f"Persist to Convex | base_url={getattr(convex, 'base_url', None)} | modules={len(modules)}")
         # Create initial course if not already present
         if existing_course_id:
             course_id = existing_course_id
@@ -98,6 +101,8 @@ async def persist_course_and_modules(
                         log.info(f"Convex upload image ok | module={mid} | storageId={sid}")
                     except Exception:
                         pass
+                else:
+                    log.warning(f"Convex upload image skipped (no URL) | module={mid}")
 
             # Upload video if present
             if m.get("video_path") and os.path.exists(m["video_path"]):
@@ -111,6 +116,8 @@ async def persist_course_and_modules(
                         log.info(f"Convex upload video ok | module={mid} | storageId={sid}")
                     except Exception:
                         pass
+                else:
+                    log.warning(f"Convex upload video skipped (no URL) | module={mid}")
 
             # Upsert module document
             try:

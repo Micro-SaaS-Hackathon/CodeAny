@@ -79,6 +79,12 @@ async def convex_diagnostics():
         return info
     # Test query endpoint using a known function name used in this app
     try:
+        # Expose candidate URLs for troubleshooting
+        candidates = getattr(convex, "_base_candidates", lambda: [])()
+        info["candidates"] = candidates
+    except Exception:
+        pass
+    try:
         await convex.query("stats:get", {})
         info["query_ok"] = True
         info["query_path"] = "/api/query"
@@ -100,13 +106,25 @@ async def convex_diagnostics():
 async def get_courses():
     if convex.enabled:
         try:
+            log.info(f"Convex list start | base_url={getattr(convex, 'base_url', None)}")
             # expects Convex function name "courses:list"
             data = await convex.query("courses:list", {})
+            # Unwrap various response shapes to a list of dicts
+            items: List[Dict[str, Any]] = []
+            if isinstance(data, list):
+                items = [x for x in data if isinstance(x, dict)]
+            elif isinstance(data, dict):
+                for k in ("items", "value", "data", "result"):
+                    v = data.get(k)
+                    if isinstance(v, list):
+                        items = [x for x in v if isinstance(x, dict)]
+                        break
+            log.info(f"Convex list ok | count={len(items)}")
             # ensure each item matches Course fields
-            return [Course(**item) for item in data]
+            return [Course(**item) for item in items]
         except Exception as e:
             # fall back if Convex missing
-            print("Convex get_courses error:", e)
+            log.warning(f"Convex get_courses error | base_url={getattr(convex, 'base_url', None)} | err={e}")
     return _fallback_list_courses()
 
 
@@ -115,10 +133,12 @@ async def create_course(payload: CourseCreate):
     title = payload.title or "Untitled Course"
     if convex.enabled:
         try:
+            log.info(f"Convex create start | title={title}")
             data = await convex.mutation("courses:create", {"title": title})
+            log.info("Convex create ok")
             return Course(**data)
         except Exception as e:
-            print("Convex create_course error:", e)
+            log.warning(f"Convex create_course error | err={e}")
     return _fallback_create_course(title)
 
 
@@ -126,15 +146,17 @@ async def create_course(payload: CourseCreate):
 async def get_stats():
     if convex.enabled:
         try:
+            log.info("Convex stats start")
             data = await convex.query("stats:get", {})
             # Ensure shape matches expected schema
             if not isinstance(data, dict):
                 raise ValueError("Invalid stats shape")
             if not all(k in data for k in ("total_courses", "active_teachers", "recent_activity")):
                 raise ValueError("Missing stats fields")
+            log.info("Convex stats ok")
             return Stats(**data)
         except Exception as e:
-            print("Convex stats error:", e)
+            log.warning(f"Convex stats error | err={e}")
             # compute from Convex courses as a backup
             try:
                 courses_raw = await convex.query("courses:list", {})
@@ -172,6 +194,7 @@ async def _update_progress(target_id: Optional[str], status: str, progress: int)
     # Update Convex if configured
     if convex.enabled and target_id:
         try:
+            log.info(f"Convex updateProgress | courseId={target_id} | status={status} | progress={progress}")
             await convex.mutation("courses:updateProgress", {"courseId": target_id, "status": status, "progress": progress})
         except Exception:
             pass

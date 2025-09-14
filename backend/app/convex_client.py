@@ -1,5 +1,10 @@
 import os
+import logging
 from typing import Any, Dict, Optional, List
+from urllib.parse import urlparse
+
+# Use standard logging here to avoid import cycles on backend.app.ai.*
+log = logging.getLogger("cursly.ai.convex")
 import httpx
 
 class ConvexClient:
@@ -13,12 +18,24 @@ class ConvexClient:
 
     def __init__(self, base_url: Optional[str] = None, deploy_key: Optional[str] = None, user_bearer: Optional[str] = None):
         bu = (base_url or os.getenv('CONVEX_URL') or '').strip().rstrip('/')
+        # Sanitize accidental paste of another env assignment like 'VITE_CONVEX_URL=https://...'
+        if '=' in bu:
+            k, v = bu.split('=', 1)
+            if v.strip().startswith(('http://', 'https://')):
+                log.warning(f"CONVEX_URL contains an '='; using value after '=' | raw={bu}")
+                bu = v.strip()
         # Normalize accidental '/api' suffix in provided URL
         if bu.endswith('/api'):
             bu = bu[:-4]
         # Ensure protocol is present; default to https if missing
         if bu and not (bu.startswith('http://') or bu.startswith('https://')):
             bu = 'https://' + bu
+        # Validate URL
+        if bu:
+            parsed = urlparse(bu)
+            if not parsed.scheme or not parsed.netloc:
+                log.warning(f"Invalid CONVEX_URL; disabling Convex client | value={bu}")
+                bu = ''
         self.base_url = bu
         self.deploy_key = deploy_key or os.getenv('CONVEX_DEPLOY_KEY')
         self.user_bearer = user_bearer or os.getenv('CONVEX_USER_BEARER')
@@ -57,24 +74,33 @@ class ConvexClient:
         """
         last_exc: Optional[Exception] = None
         headers = self._headers(admin)
+        tried: List[str] = []
         for base in self._base_candidates():
             for path in paths:
                 url = f"{base}{path}"
+                tried.append(url)
                 try:
                     async with httpx.AsyncClient(timeout=20) as client:
                         res = await client.post(url, headers=headers, json=payload)
                         res.raise_for_status()
                         body = res.json()
-                        # Convex may return 200 with { status: 'error', error: {...} }
-                        if isinstance(body, dict) and body.get('status') == 'error':
-                            # Normalize error raising so callers go to fallback
-                            err = body.get('error')
-                            raise RuntimeError(f"Convex error: {err}")
+                        # Normalize common Convex response envelopes
+                        if isinstance(body, dict):
+                            status = body.get('status')
+                            if status == 'error':
+                                err = body.get('error')
+                                raise RuntimeError(f"Convex error: {err}")
+                            # unwrap typical value containers
+                            for key in ('value', 'data', 'result'):
+                                if key in body:
+                                    return body[key]
                         return body
                 except Exception as e:
                     last_exc = e
+                    log.warning(f"Convex HTTP error | url={url} | err={e}")
                     continue
         if last_exc:
+            log.error(f"Convex request failed after trying candidates | tried={tried} | last_err={last_exc}")
             raise last_exc
         raise RuntimeError('Convex base URL not configured')
 
