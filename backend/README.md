@@ -69,7 +69,7 @@ Tip: set `MANIM_TMP_DIR` (in `.env`) to a path outside the repo, e.g. `~/.cache/
 
 ### Manim compilation (videos)
 
-The AI pipeline compiles Manim animations for modules. By default it uses Docker (`manimcommunity/manim:stable`). If Docker is not available or times out, the backend now falls back automatically:
+The AI pipeline compiles Manim animations for modules. By default it uses Docker (`manimcommunity/manim:stable`). If Docker is not available or times out, the backend falls back automatically. You can also prefer your currently activated virtualenv for Manim.
 
 - Try local `manim` binary if installed (e.g., `brew install manim`)
 - Else generate a short placeholder MP4 via `ffmpeg` (if available)
@@ -90,6 +90,18 @@ MANIM_DOCKER_RUN_TIMEOUT_S=180
 MANIM_LOCAL_RUN_TIMEOUT_S=180
 MANIM_PLACEHOLDER_SECONDS=5
 MANIM_PLACEHOLDER_SIZE=1280x720
+
+# Prefer local (virtualenv) first; uses `sys.executable -m manim`
+MANIM_LOCAL_FIRST=1
+# Optionally force interpreter or CLI paths
+# MANIM_LOCAL_PYTHON=/path/to/venv/bin/python
+# MANIM_LOCAL_BIN=/path/to/venv/bin/manim
+# If these paths are relative (e.g., .venv/bin/python), they are resolved against
+# MANIM_BASE_DIR if set, else the backend's launch working directory.
+# MANIM_BASE_DIR=/absolute/path/to/project/root
+
+# If you see pydub warnings about ffmpeg inside Docker/local, you can set:
+# FFMPEG_BINARY=ffmpeg
 ```
 
 Common fixes for `Docker inspect timeout`:
@@ -97,6 +109,7 @@ Common fixes for `Docker inspect timeout`:
 - Start Docker Desktop and retry.
 - Increase `MANIM_DOCKER_INSPECT_TIMEOUT_S`.
 - Or force fallback: set `MANIM_ENABLE_DOCKER=0` to use local/placeholder.
+- To ensure the local (activated venv) is used, keep `MANIM_LOCAL_FIRST=1`. The runner calls `sys.executable -m manim`, preventing accidental use of a global `manim` from `/usr/local/...`.
 - Ensure `ffmpeg` is installed for placeholder: `brew install ffmpeg`.
 
 ## CORS

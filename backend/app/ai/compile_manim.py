@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import threading
 from pathlib import Path
+import sys
 from .logging_utils import get_logger
 import time
 from typing import Optional
@@ -12,6 +13,7 @@ from contextlib import contextmanager
 
 log = get_logger("compile")
 _compile_sem: Optional[threading.BoundedSemaphore] = None
+_PROC_CWD: Path = Path.cwd().resolve()
 
 
 def _get_compile_sem() -> threading.BoundedSemaphore:
@@ -92,18 +94,115 @@ def _workdir_base() -> Path:
     home_cache.mkdir(parents=True, exist_ok=True)
     return home_cache
 
+
+def _resolve_local_path(path_str: str) -> str:
+    """Resolve a possibly relative path against the backend launch directory.
+
+    If MANIM_BASE_DIR is set, resolves relative paths against it; otherwise uses
+    the process working directory at import time. Always expands '~'.
+    """
+    try:
+        p = Path(path_str).expanduser()
+        if not p.is_absolute():
+            base = os.getenv("MANIM_BASE_DIR")
+            base_path = Path(base).expanduser().resolve() if base else _PROC_CWD
+            p = (base_path / p).resolve()
+        return str(p)
+    except Exception:
+        return path_str
+
+
+def _find_venv_python() -> Optional[str]:
+    """Heuristically locate a project virtualenv Python interpreter.
+
+    Checks common locations relative to MANIM_BASE_DIR (if set) or the backend
+    launch directory captured at import time. Returns the first executable path
+    found, else None.
+    """
+    bases: list[Path] = []
+    base_env = os.getenv("MANIM_BASE_DIR")
+    if base_env:
+        try:
+            bases.append(Path(base_env).expanduser().resolve())
+        except Exception:
+            pass
+    bases.append(_PROC_CWD)
+    # Also try repository root if we were launched from ./backend
+    try:
+        if _PROC_CWD.name == "backend":
+            bases.append(_PROC_CWD.parent)
+    except Exception:
+        pass
+    unix_candidates = [
+        ".venv/bin/python",
+        ".venv/bin/python3",
+        "venv/bin/python",
+        "venv/bin/python3",
+    ]
+    win_candidates = [
+        ".venv/Scripts/python.exe",
+        "venv/Scripts/python.exe",
+    ]
+    cand = unix_candidates
+    if os.name == "nt":
+        cand = win_candidates + unix_candidates
+    for b in bases:
+        for rel in cand:
+            p = (b / rel).resolve()
+            try:
+                if p.exists() and os.access(str(p), os.X_OK):
+                    return str(p)
+            except Exception:
+                continue
+    return None
+
+
+def _local_manim_command() -> list[str] | None:
+    """Return command to execute Manim in the current Python environment.
+
+    Preference order:
+      1) MANIM_LOCAL_PYTHON -> [python, -m, manim]
+      2) sys.executable -> [sys.executable, -m, manim]
+      3) MANIM_LOCAL_BIN -> [manim_cli]
+      4) bare 'manim' if available
+    """
+    explicit_py = os.getenv("MANIM_LOCAL_PYTHON")
+    if explicit_py:
+        resolved = _resolve_local_path(explicit_py)
+        log.info(f"Using MANIM_LOCAL_PYTHON | resolved={resolved}")
+        return [resolved, "-m", "manim"]
+    explicit_bin = os.getenv("MANIM_LOCAL_BIN")
+    if explicit_bin:
+        resolvedb = _resolve_local_path(explicit_bin)
+        log.info(f"Using MANIM_LOCAL_BIN | resolved={resolvedb}")
+        return [resolvedb]
+    # Try to auto-detect a project venv
+    vpy = _find_venv_python()
+    if vpy:
+        log.info(f"Using detected venv python for manim | exe={vpy}")
+        return [vpy, "-m", "manim"]
+    if sys.executable:
+        log.info(f"Using sys.executable for manim | exe={sys.executable}")
+        return [sys.executable, "-m", "manim"]
+    if shutil.which("manim"):
+        log.info("Using 'manim' from PATH")
+        return ["manim"]
+    return None
+
 def _try_local_manim(work: Path, module_id: str, pyfile: Path, mp4_name: str) -> Optional[str]:
     """Attempt to use a local `manim` binary if available (no Docker).
 
     Returns the path to the mp4 if successful, else None.
     """
-    if not shutil.which("manim"):
+    base_cmd = _local_manim_command()
+    if not base_cmd:
         return None
-    cmd = [
-        "manim", "-qL", "-o", mp4_name, str(pyfile), "Lesson",
-    ]
+    cmd = base_cmd + ["-qL", "-o", mp4_name, str(pyfile), "Lesson"]
     try:
-        log.info(f"Local manim run | module={module_id} | cmd={' '.join(cmd)}")
+        log.info(f"Local manim run | module={module_id} | cmd={' '.join(cmd)} | py={base_cmd[0]}")
+        env = os.environ.copy()
+        env.setdefault("FFMPEG_BINARY", "ffmpeg")
+        env.setdefault("PYDUB_SUPPRESS_WARNINGS", "1")
         res = subprocess.run(
             cmd,
             check=True,
@@ -111,6 +210,7 @@ def _try_local_manim(work: Path, module_id: str, pyfile: Path, mp4_name: str) ->
             stderr=subprocess.PIPE,
             text=True,
             cwd=str(work),
+            env=env,
             timeout=float(os.getenv("MANIM_LOCAL_RUN_TIMEOUT_S", "180") or 180),
         )
         if res.stdout:
@@ -175,6 +275,8 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
     if not docker_available:
         log.warning("Docker CLI not available or disabled; will try local/placeholder")
 
+    prefer_local = (os.getenv("MANIM_LOCAL_FIRST", "1") != "0") or bool(os.getenv("VIRTUAL_ENV"))
+
     with _limit_parallelism():
         # Work directory (under a Docker-shared path)
         base = _workdir_base()
@@ -195,13 +297,28 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
         pyfile.write_text(code, encoding="utf-8")
         log.info(f"Manim compile start | module={module_id} | workdir={str(work)} | file={pyfile.name}")
 
+        def _check_outputs() -> Optional[str]:
+            out = work / "media" / "videos" / pyfile.stem / "480p15" / mp4_name
+            alt = work / mp4_name
+            if out.exists() or alt.exists():
+                chosen = out if out.exists() else alt
+                try:
+                    size = chosen.stat().st_size
+                except Exception:
+                    size = -1
+                log.info(f"Manim compile ok | module={module_id} | output={chosen} | size={size}")
+                return str(chosen)
+            return None
+
+        # Try local first if preferred
+        if prefer_local and use_local:
+            out_local_first = _try_local_manim(work, module_id, pyfile, mp4_name)
+            if out_local_first:
+                return out_local_first
+
+        # Docker attempt
         image = os.getenv("MANIM_DOCKER_IMAGE", "manimcommunity/manim:stable")
-        # Ensure image exists before running isolated network
-        if not docker_available or not _ensure_image(image):
-            log.warning(f"Docker image unavailable; will try local/placeholder | module={module_id} | image={image}")
-            # fall through to local/placeholder below
-        else:
-            # Docker run; mounts tmpdir at /manim and writes output there
+        if docker_available and _ensure_image(image):
             cmd = [
                 "docker", "run", "--rm", "--network=none",
                 "--cpus=1", "--memory=1g", "--pids-limit=256",
@@ -209,6 +326,8 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
             if os.getenv("MANIM_DOCKER_USER", "host").lower() != "none":
                 cmd += ["-u", f"{os.getuid()}:{os.getgid()}"]
             cmd += [
+                "-e", "FFMPEG_BINARY=ffmpeg",
+                "-e", "PYDUB_SUPPRESS_WARNINGS=1",
                 "-v", f"{str(work)}:/manim",
                 image,
                 "manim", "-qL", "-o", mp4_name, f"/manim/{pyfile.name}", "Lesson",
@@ -229,39 +348,34 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
                 if res.stderr:
                     log.info(f"Manim docker stderr | module={module_id} | preview={res.stderr[:240]}")
                 log.info(f"Manim docker done | module={module_id} | took={time.time()-start:.2f}s")
+                outp = _check_outputs()
+                if outp:
+                    return outp
             except subprocess.TimeoutExpired:
                 log.warning(f"Manim docker timeout | module={module_id}")
             except subprocess.CalledProcessError as e:
                 log.warning(f"Manim compile error | module={module_id} | err={e} | stderr={(e.stderr or '')[:240]}")
             except Exception as e:
                 log.warning(f"Manim compile error | module={module_id} | err={e}")
-
-    # Try local manim fallback
-    if use_local:
-        out_local = _try_local_manim(work, module_id, pyfile, mp4_name)
-        if out_local:
-            return out_local
-
-    # Try placeholder video for graceful UX
-    if use_placeholder:
-        ph = _try_ffmpeg_placeholder(work, module_id, mp4_name, title=f"Lesson {module_id}")
-        if ph:
-            return ph
         else:
-            log.warning("Placeholder generation failed; returning no video")
+            log.warning(f"Docker unavailable or image missing | module={module_id} | image={image}")
 
-    out = work / "media" / "videos" / pyfile.stem / "480p15" / mp4_name
-    if out.exists():
-        try:
-            size = out.stat().st_size
-        except Exception:
-            size = -1
-        log.info(f"Manim compile ok | module={module_id} | output={out} | size={size}")
-        return str(out)
-    # Some versions may place output directly under /manim
-    alt = work / mp4_name
-    if alt.exists():
-        log.info(f"Manim compile ok | module={module_id} | output={alt}")
-        return str(alt)
-    log.warning(f"Manim output not found | module={module_id} | looked=[{out}], alt=[{alt}]")
-    return None
+        # Try local if not tried
+        if use_local:
+            out_local = _try_local_manim(work, module_id, pyfile, mp4_name)
+            if out_local:
+                return out_local
+
+        # Placeholder as last resort
+        if use_placeholder:
+            ph = _try_ffmpeg_placeholder(work, module_id, mp4_name, title=f"Lesson {module_id}")
+            if ph:
+                return ph
+            else:
+                log.warning("Placeholder generation failed; checking paths once more")
+
+        outp = _check_outputs()
+        if outp:
+            return outp
+        log.warning(f"Manim output not found | module={module_id}")
+        return None

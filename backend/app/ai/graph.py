@@ -91,9 +91,11 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
                 cons_l = state_in.get("constraints", {})
                 lang = cons_l.get("language", "en")
                 async def process(spec: ModuleSpec) -> ModuleArtifact:
-                    text, code, gim = await asyncio.gather(
-                        write_text(spec, lang, cons_l),
-                        write_manim_code(spec, lang),
+                    # First generate the lesson text so Manim captions can mirror it.
+                    text = await write_text(spec, lang, cons_l)
+                    # Generate Manim code and any image asset concurrently afterwards.
+                    code, gim = await asyncio.gather(
+                        write_manim_code(spec, lang, text),
                         generate_gemini_image_or_fallback(spec, lang, cons_l),
                     )
                     return {
@@ -218,9 +220,10 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
 
         async def process_module(spec: ModuleSpec) -> ModuleArtifact:
             lang = constraints.get("language", "en")
-            text, code, gim = await asyncio.gather(
-                write_text(spec, lang, constraints),
-                write_manim_code(spec, lang),
+            # Write text first to drive Manim captions.
+            text = await write_text(spec, lang, constraints)
+            code, gim = await asyncio.gather(
+                write_manim_code(spec, lang, text),
                 generate_gemini_image_or_fallback(spec, lang, constraints),
             )
             art: ModuleArtifact = {

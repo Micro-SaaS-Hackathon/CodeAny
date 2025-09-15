@@ -35,7 +35,7 @@ async def convex_generate_upload_url(convex: ConvexClient) -> Optional[str]:
 async def convex_put_bytes(upload_url: str, data: bytes, content_type: str = "application/octet-stream") -> Optional[str]:
     try:
         async with httpx.AsyncClient(timeout=120) as client:
-            res = await client.put(upload_url, content=data, headers={"Content-Type": content_type})
+            res = await client.post(upload_url, content=data, headers={"Content-Type": content_type})
             res.raise_for_status()
             body = res.json()
             # Convex returns { storageId: string }
@@ -98,7 +98,10 @@ async def persist_course_and_modules(
                         img_bytes = base64.b64decode(m["gemini_output"]["gemini_image_b64"])
                         sid = await convex_put_bytes(upload_url, img_bytes, content_type="image/png")
                         storage_ids[str(mid)]["image"] = sid
-                        log.info(f"Convex upload image ok | module={mid} | storageId={sid}")
+                        if sid:
+                            log.info(f"Convex upload image ok | module={mid} | storageId={sid}")
+                        else:
+                            log.warning(f"Convex upload image failed (no storageId) | module={mid}")
                     except Exception:
                         pass
                 else:
@@ -113,7 +116,10 @@ async def persist_course_and_modules(
                             vid_bytes = f.read()
                         sid = await convex_put_bytes(upload_url, vid_bytes, content_type="video/mp4")
                         storage_ids[str(mid)]["video"] = sid
-                        log.info(f"Convex upload video ok | module={mid} | storageId={sid}")
+                        if sid:
+                            log.info(f"Convex upload video ok | module={mid} | storageId={sid}")
+                        else:
+                            log.warning(f"Convex upload video failed (no storageId) | module={mid}")
                     except Exception:
                         pass
                 else:

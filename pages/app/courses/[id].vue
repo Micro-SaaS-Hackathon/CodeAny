@@ -12,7 +12,7 @@ const router = useRouter()
 const id = ref<string>('')
 const loading = ref(true)
 const saving = ref(false)
-const { getCourse, updateCourse, listModules, upsertModule, getConvexFileUrl, recompileModule } = useCourses()
+const { getCourse, updateCourse, listModules, upsertModule, recompileModule } = useCourses()
 const toast = useToast()
 
 const course = ref<CourseDetail | null>(null)
@@ -210,9 +210,8 @@ async function triggerRecompile(m: Module) {
     const mods = (course.value.modules || []).map(mm => mm.moduleId === updated.moduleId ? updated : mm)
     course.value = { ...course.value, modules: mods }
     toast.add({ title: 'Video recompiled', icon: 'i-lucide-badge-check', color: 'green' })
-    if (viewOpen.value && viewTarget.value?.moduleId === m.moduleId && (updated as any).videoStorageId) {
-      viewVideoUrl.value = await getConvexFileUrl((updated as any).videoStorageId as string)
-    }
+    // If user is on the dedicated viewer page, it resolves URLs on load.
+    // List page no longer manages a modal viewer; nothing else to update here.
   } catch (e: any) {
     toast.add({ title: 'Recompile failed', description: String(e?.data?.detail || e?.message || e), color: 'red' })
   } finally {

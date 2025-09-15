@@ -300,6 +300,9 @@ Auth routes (`/auth`, `/confirm`) are excluded from prerender to enable dynamic 
   - Optionally run: `npm cache verify` and try again.
 - Icons not appearing:
   - Use `UIcon` with `name="i-lucide-..."` or `lucide:...`. Ensure `@nuxt/ui` is installed and listed under `modules` in [nuxt.config.ts](CodeAny/nuxt.config.ts:0:0-0:0).
+- Nitro dev error `Error: spawn EBADF` on `npm run dev`:
+  - This often occurs on Node 22. Use Node 20 LTS. We include `.nvmrc` (`20.18.0`) so you can run `nvm use`.
+  - Alternatively, set `engines.node` to Node 20 in your environment or switch via your version manager.
 
 ## Roadmap / Customization
 

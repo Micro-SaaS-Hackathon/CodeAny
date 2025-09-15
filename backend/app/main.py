@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+from pathlib import Path
 from uuid import uuid4
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException
@@ -19,6 +20,16 @@ from .models import (
     ModuleUpdate,
 )
 from .convex_client import ConvexClient
+
+# Load environment from .env automatically (so MANIM_* and others are picked up)
+try:  # pragma: no cover - best-effort env loading
+    from dotenv import load_dotenv  # type: ignore
+    # Search upwards from CWD for a .env file; do not override real env
+    load_dotenv(override=False)
+    # Additionally try project root (two levels up from this file)
+    load_dotenv(dotenv_path=str(Path(__file__).resolve().parents[2] / ".env"), override=False)
+except Exception:
+    pass
 from .ai import run_course_build
 from .ai.logging_utils import get_logger
 from .ai.persist_convex import convex_generate_upload_url, convex_put_bytes
