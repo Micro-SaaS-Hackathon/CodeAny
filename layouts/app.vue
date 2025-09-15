@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute } from '#app'
-import { useSupabaseUser } from '#imports'
+import { useSupabaseUser, useSupabaseClient, useToast, navigateTo } from '#imports'
 import CreateCourseModal from '~/components/CreateCourseModal.vue'
 import { useCreateCourseModal } from '~/composables/useCreateCourseModal'
 
 const q = ref('')
 const user = useSupabaseUser()
+const supabase = useSupabaseClient()
+const toast = useToast()
 const avatarName = computed(() => (user.value?.user_metadata as any)?.name || user.value?.email || 'User')
 const avatarSrc = computed(() => (user.value?.user_metadata as any)?.avatar_url || (user.value?.user_metadata as any)?.picture || null)
 const avatarInitial = computed(() => {
@@ -20,6 +22,24 @@ const isCourses = computed(() => route.path.startsWith('/app/courses'))
 
 // Global control for Create Course modal (shared via composable)
 const { isOpen: showCreateCourse, open: openCreateCourse } = useCreateCourseModal()
+
+async function handleLogout() {
+  try {
+    await supabase.auth.signOut()
+    toast.add({
+      title: 'Signed out successfully',
+      color: 'green'
+    })
+    navigateTo('/auth')
+  } catch (error) {
+    console.error('Error signing out:', error)
+    toast.add({
+      title: 'Error signing out',
+      description: 'Please try again',
+      color: 'red'
+    })
+  }
+}
 </script>
 
 <template>
@@ -43,14 +63,18 @@ const { isOpen: showCreateCourse, open: openCreateCourse } = useCreateCourseModa
                 <span class="text-xs font-semibold">{{ avatarInitial }}</span>
               </UAvatar>
             </template>
-            <template v-if="avatarSrc">
-              <UAvatar :src="avatarSrc" :alt="avatarName" size="md" class="ring-2 ring-primary/60" />
-            </template>
-            <template v-else>
-              <UAvatar :alt="avatarName" size="md" class="bg-primary text-white ring-2 ring-primary/60">
-                <span class="text-xs font-semibold">{{ avatarInitial }}</span>
-              </UAvatar>
-            </template>
+            <UDropdownMenu :items="[{ label: 'Sign out', icon: 'i-lucide-log-out', onSelect: handleLogout }]" mode="click">
+              <UButton variant="ghost" :padded="false" class="p-1">
+                <template v-if="avatarSrc">
+                  <UAvatar :src="avatarSrc" :alt="avatarName" size="md" class="ring-2 ring-primary/60" />
+                </template>
+                <template v-else>
+                  <UAvatar :alt="avatarName" size="md" class="bg-primary text-white ring-2 ring-primary/60">
+                    <span class="text-xs font-semibold">{{ avatarInitial }}</span>
+                  </UAvatar>
+                </template>
+              </UButton>
+            </UDropdownMenu>
           </ClientOnly>
         </div>
       </UContainer>
