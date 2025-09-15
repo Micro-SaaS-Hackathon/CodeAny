@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import { useRoute, useRouter } from '#app'
+import { useRoute, useRouter, useNuxtApp } from '#app'
 import { useToast } from '#imports'
 import type { Module } from '~/types/course'
 import { useCourses } from '~/composables/useCourses'
@@ -31,11 +31,33 @@ function inlineMd(s: string) {
   return s
 }
 function renderMarkdown(src: string): string {
+  const { $hljs } = useNuxtApp()
   const parts = (src || '').split(/```/)
   let html = ''
   for (let i = 0; i < parts.length; i++) {
     const chunk = parts[i]
-    if (i % 2 === 1) { html += `<pre class=\"rounded-md border border-default p-3 overflow-auto\"><code>${escapeHtml(chunk)}</code></pre>`; continue }
+    if (i % 2 === 1) {
+      // Code block: first line may be language id
+      const lines = chunk.split('\n')
+      let language = 'text'
+      let code = chunk
+      if (lines.length > 0 && lines[0].trim()) {
+        const firstLine = lines[0].trim().toLowerCase()
+        const langMap: Record<string, string> = { js: 'javascript', py: 'python', ts: 'typescript', html: 'xml', shell: 'bash' }
+        const detected = langMap[firstLine] || firstLine
+        if ($hljs?.getLanguage && $hljs.getLanguage(detected)) {
+          language = detected
+          code = lines.slice(1).join('\n')
+        }
+      }
+      try {
+        const highlighted = $hljs?.highlight ? $hljs.highlight(code, { language }).value : escapeHtml(code)
+        html += `<pre class="rounded-md border border-default p-3 overflow-auto"><code class="hljs language-${language}">${highlighted}</code></pre>`
+      } catch {
+        html += `<pre class="rounded-md border border-default p-3 overflow-auto"><code class="hljs">${escapeHtml(code)}</code></pre>`
+      }
+      continue
+    }
     const lines = chunk.split(/\r?\n/)
     let inList = false
     for (const raw of lines) {
@@ -67,11 +89,15 @@ async function load() {
     // Fetch modules list (for prev/next)
     try {
       const list = await listModules(courseId.value)
-      // Sort by numeric moduleId if possible, else lexicographic
+      const idx = (v: unknown) => {
+        const s = String((v as any) ?? '')
+        const m = s.match(/(\d+)/)
+        return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY
+      }
       modules.value = [...list].sort((a, b) => {
-        const na = parseInt(String(a.moduleId), 10)
-        const nb = parseInt(String(b.moduleId), 10)
-        if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb
+        const ai = idx(a.moduleId)
+        const bi = idx(b.moduleId)
+        if (ai !== bi) return ai - bi
         return String(a.moduleId).localeCompare(String(b.moduleId))
       })
     } catch {}

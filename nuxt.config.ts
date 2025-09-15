@@ -21,7 +21,10 @@ export default defineNuxtConfig({
       }
     }]
   ],
-  css: ['~/assets/css/main.css'],
+  css: [
+    '~/assets/css/main.css',
+    'highlight.js/styles/github-dark.css'
+  ],
   devServer: {
     port: 3010,
     host: '0.0.0.0'

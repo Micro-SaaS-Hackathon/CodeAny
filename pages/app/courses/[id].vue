@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed, nextTick } from 'vue'
-import { useRoute, useRouter } from '#app'
+import { useRoute, useRouter, useNuxtApp } from '#app'
 import { useToast } from '#imports'
 import type { CourseDetail, Module } from '~/types/course'
 import { useCourses } from '~/composables/useCourses'
@@ -37,12 +37,50 @@ function escapeHtml(s: string) {
 }
 
 function renderMarkdown(src: string): string {
+  const { $hljs } = useNuxtApp()
   const parts = (src || '').split(/```/)
   let html = ''
   for (let i = 0; i < parts.length; i++) {
     const chunk = parts[i]
     if (i % 2 === 1) {
-      html += `<pre class="rounded-md border border-default p-3 overflow-auto"><code>${escapeHtml(chunk)}</code></pre>`
+      // This is a code block
+      const lines = chunk.split('\n')
+      let language = 'text'
+      let code = chunk
+
+      // Check if first line contains language specifier
+      if (lines.length > 0 && lines[0].trim()) {
+        const firstLine = lines[0].trim()
+        // Common language aliases
+        const langMap: Record<string, string> = {
+          'js': 'javascript',
+          'py': 'python',
+          'ts': 'typescript',
+          'html': 'xml',
+          'shell': 'bash'
+        }
+        const detectedLang = langMap[firstLine.toLowerCase()] || firstLine.toLowerCase()
+        if ($hljs.getLanguage(detectedLang)) {
+          language = detectedLang
+          code = lines.slice(1).join('\n')
+        }
+      }
+
+      try {
+        let highlighted = ''
+        if (language && language !== 'text' && $hljs.getLanguage(language)) {
+          highlighted = $hljs.highlight(code, { language }).value
+        } else if ($hljs.highlightAuto) {
+          highlighted = $hljs.highlightAuto(code).value
+          language = 'auto'
+        } else {
+          highlighted = escapeHtml(code)
+        }
+        html += `<pre class="rounded-md border border-default p-3 overflow-auto"><code class="hljs language-${language}">${highlighted}</code></pre>`
+      } catch (e) {
+        // Fallback to plain text if highlighting fails
+        html += `<pre class="rounded-md border border-default p-3 overflow-auto"><code class="hljs">${escapeHtml(code)}</code></pre>`
+      }
       continue
     }
     const lines = chunk.split(/\r?\n/)
@@ -90,6 +128,24 @@ const mdHtml = computed(() => renderMarkdown(String(moduleDraft.value.text || ''
 
 const progress = computed(() => course.value?.progress ?? 0)
 const isModuleRoute = computed(() => String(route.name || '').startsWith('app-courses-id-modules'))
+
+// Sort modules by index (m1, m2, m3, etc.)
+const sortedModules = computed(() => {
+  if (!course.value?.modules) return []
+  const idx = (v: unknown) => {
+    const s = String((v as any) ?? '')
+    const m = s.match(/(\d+)/)
+    return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY
+  }
+  return [...course.value.modules]
+    .sort((a, b) => {
+      const ai = idx(a.moduleId)
+      const bi = idx(b.moduleId)
+      if (ai !== bi) return ai - bi
+      // fallback stable tie-breaker
+      return String(a.moduleId).localeCompare(String(b.moduleId))
+    })
+})
 
 async function load() {
   if (!id.value) return
@@ -325,7 +381,7 @@ watch(() => route.params.id, (v) => { id.value = String(v || ''); load() })
       <div v-else>
         <div v-if="!course?.modules?.length" class="text-dimmed text-sm">No modules yet.</div>
         <div v-else class="space-y-3">
-          <div v-for="m in course.modules" :key="m.moduleId" :id="`mod-${m.moduleId}`" class="border border-default rounded-md p-3">
+          <div v-for="m in sortedModules" :key="m.moduleId" :id="`mod-${m.moduleId}`" class="border border-default rounded-md p-3">
             <div class="flex items-start justify-between gap-2">
               <div>
                 <div class="font-medium">{{ m.title || `Module ${m.moduleId}` }}</div>
