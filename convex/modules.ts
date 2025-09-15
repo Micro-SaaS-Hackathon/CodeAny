@@ -49,3 +49,16 @@ export const listByCourse = query(async (ctx, { courseId }: { courseId: string }
     videoStorageId: d.videoStorageId ?? null,
   }));
 });
+
+export const delete_ = mutation(async (ctx, { courseId, moduleId }: { courseId: string; moduleId: string }) => {
+  const { db } = ctx;
+  if (!courseId || !moduleId) return null;
+  const existing = await db
+    .query("modules")
+    .withIndex("by_course_module", (q: any) => q.eq("courseId", courseId).eq("moduleId", String(moduleId)))
+    .unique();
+
+  if (!existing) return null;
+  await db.delete(existing._id);
+  return { deleted: true, courseId, moduleId };
+});

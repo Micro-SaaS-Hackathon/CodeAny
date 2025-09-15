@@ -208,3 +208,17 @@ export const updateBasic = mutation(
     };
   }
 );
+
+export const delete_ = mutation(
+  async (ctx, { courseId }: { courseId: string }) => {
+    const { db } = ctx;
+    const course = await db
+      .query("courses")
+      .withIndex("by_public_id", (q: any) => q.eq("id", courseId))
+      .unique();
+    if (!course) return null;
+    const _id = course._id;
+    await db.delete(_id);
+    return { deleted: true, id: courseId };
+  }
+);

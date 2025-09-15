@@ -307,6 +307,27 @@ async def update_course(course_id: str, payload: CourseUpdate):
     return _fallback_get_course(course_id)
 
 
+@app.delete("/courses/{course_id}")
+async def delete_course(course_id: str):
+    if convex.enabled:
+        try:
+            result = await convex.mutation("courses:delete_", {"courseId": course_id})
+            if not result:
+                raise HTTPException(status_code=404, detail="Course not found")
+            return {"deleted": True, "id": course_id}
+        except Exception as e:
+            log.warning(f"Convex delete_course error | err={e}")
+    # fallback memory delete
+    for i, c in enumerate(_memory_courses):
+        if c.id == course_id:
+            _memory_courses.pop(i)
+            # Clean up modules and meta
+            _memory_modules.pop(course_id, None)
+            _memory_course_meta.pop(course_id, None)
+            return {"deleted": True, "id": course_id}
+    raise HTTPException(status_code=404, detail="Course not found")
+
+
 @app.get("/courses/{course_id}/modules", response_model=List[Module])
 async def list_modules(course_id: str):
     if convex.enabled:
@@ -386,6 +407,26 @@ async def upsert_module(course_id: str, module_id: str, payload: ModuleUpdate):
         mods.append(mod)
     _memory_modules[course_id] = mods
     return mod
+
+
+@app.delete("/courses/{course_id}/modules/{module_id}")
+async def delete_module(course_id: str, module_id: str):
+    if convex.enabled:
+        try:
+            result = await convex.mutation("modules:delete_", {"courseId": course_id, "moduleId": module_id})
+            if not result:
+                raise HTTPException(status_code=404, detail="Module not found")
+            return {"deleted": True, "courseId": course_id, "moduleId": module_id}
+        except Exception as e:
+            log.warning(f"Convex delete_module error | err={e}")
+    # fallback memory delete
+    mods = _memory_modules.get(course_id, [])
+    for i, m in enumerate(mods):
+        if m.moduleId == module_id:
+            mods.pop(i)
+            _memory_modules[course_id] = mods
+            return {"deleted": True, "courseId": course_id, "moduleId": module_id}
+    raise HTTPException(status_code=404, detail="Module not found")
 
 
 @app.post("/courses/{course_id}/modules/{module_id}/recompile", response_model=Module)

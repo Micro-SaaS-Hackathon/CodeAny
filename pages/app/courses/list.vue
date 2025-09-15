@@ -3,14 +3,16 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import type { Course } from '~/types/course'
 import { useCourses } from '~/composables/useCourses'
 import { useRoute } from '#app'
+import { useToast } from '#imports'
 
 // Render this page client-side only to avoid any SSR/hydration issues
 definePageMeta({ layout: 'app', ssr: false })
 
-const { listCourses, watchCourseProgress, isCourseInFlight, isCourseErrored, courseStatusLabel, courseStatusColor } = useCourses()
+const { listCourses, watchCourseProgress, isCourseInFlight, isCourseErrored, courseStatusLabel, courseStatusColor, deleteCourse } = useCourses()
 
 const loading = ref(true)
 const courses = ref<Course[]>([])
+const toast = useToast()
 
 async function load() {
   loading.value = true
@@ -30,6 +32,21 @@ function fmt(d: string) {
   try {
     return new Date(d).toLocaleString()
   } catch { return d }
+}
+
+async function handleDeleteCourse(courseId: string, courseTitle: string) {
+  if (confirm(`Are you sure you want to delete the course "${courseTitle}"? This action cannot be undone.`)) {
+    try {
+      await deleteCourse(courseId)
+      // Remove the course from the local list
+      courses.value = courses.value.filter((c: any) => c.id !== courseId)
+      // Show success message
+      await toast.add({ title: 'Course deleted successfully', color: 'green' })
+    } catch (error) {
+      console.error('Failed to delete course:', error)
+      await toast.add({ title: 'Failed to delete course', description: 'Please try again later', color: 'red' })
+    }
+  }
 }
 
 // If redirected here after starting AI build, begin polling via ?poll=1
@@ -93,6 +110,7 @@ onUnmounted(() => { stopPoll && stopPoll() })
                 <th class="px-2 sm:px-3 py-2">Status</th>
                 <th class="px-2 sm:px-3 py-2 hidden md:table-cell">Created</th>
                 <th class="px-2 sm:px-3 py-2 hidden lg:table-cell">Updated</th>
+                <th class="px-2 sm:px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -122,6 +140,16 @@ onUnmounted(() => { stopPoll && stopPoll() })
                 </td>
                 <td class="px-2 sm:px-3 py-2 hidden md:table-cell text-xs sm:text-sm">{{ fmt(row.created_at) }}</td>
                 <td class="px-2 sm:px-3 py-2 hidden lg:table-cell text-xs sm:text-sm">{{ fmt(row.updated_at) }}</td>
+                <td class="px-2 sm:px-3 py-2">
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="red"
+                    icon="i-lucide-trash-2"
+                    @click.stop="handleDeleteCourse(row.id, row.title)"
+                    :loading="false"
+                  />
+                </td>
               </tr>
             </tbody>
           </table>

@@ -85,6 +85,14 @@ export function useCourses() {
     } catch { return null }
   }
 
+  async function deleteCourse(id: string): Promise<{ deleted: boolean; id: string }> {
+    return await $fetch<{ deleted: boolean; id: string }>(`${base}/courses/${id}`, { method: 'DELETE' })
+  }
+
+  async function deleteModule(courseId: string, moduleId: string): Promise<{ deleted: boolean; courseId: string; moduleId: string }> {
+    return await $fetch<{ deleted: boolean; courseId: string; moduleId: string }>(`${base}/courses/${courseId}/modules/${moduleId}`, { method: 'DELETE' })
+  }
+
   async function recompileModule(courseId: string, moduleId: string): Promise<Module> {
     return await $fetch<Module>(`${base}/courses/${courseId}/modules/${moduleId}/recompile`, { method: 'POST' })
   }
@@ -244,9 +252,11 @@ export function useCourses() {
     watchCourseProgress,
     getCourse,
     updateCourse,
+    deleteCourse,
     listModules,
     getModule,
     upsertModule,
+    deleteModule,
     getConvexFileUrl,
     recompileModule,
     isCourseInFlight,
