@@ -96,8 +96,10 @@ onUnmounted(() => { stopPoll && stopPoll() })
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in courses" :key="row.id" class="border-t border-default">
-                <td class="px-2 sm:px-3 py-2 font-medium truncate max-w-32 sm:max-w-none">{{ row.title }}</td>
+              <tr v-for="row in courses" :key="row.id" class="border-t border-default hover:bg-muted/30 cursor-pointer" @click="$router.push(`/app/courses/${row.id}`)">
+                <td class="px-2 sm:px-3 py-2 font-medium truncate max-w-32 sm:max-w-none">
+                  <NuxtLink :to="`/app/courses/${row.id}`" class="hover:underline">{{ row.title }}</NuxtLink>
+                </td>
                 <td class="px-2 sm:px-3 py-2 hidden sm:table-cell">
                   <div class="flex items-center gap-2 sm:gap-3 w-32 sm:w-56">
                     <UProgress :value="row.progress" class="flex-1" />

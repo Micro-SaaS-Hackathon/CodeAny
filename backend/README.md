@@ -67,6 +67,38 @@ uvicorn backend.app.main:app --reload --port 8000 --reload-exclude tmp/manim_run
 
 Tip: set `MANIM_TMP_DIR` (in `.env`) to a path outside the repo, e.g. `~/.cache/cursly/manim_runs`, so Manim compiles don’t trigger the dev reload.
 
+### Manim compilation (videos)
+
+The AI pipeline compiles Manim animations for modules. By default it uses Docker (`manimcommunity/manim:stable`). If Docker is not available or times out, the backend now falls back automatically:
+
+- Try local `manim` binary if installed (e.g., `brew install manim`)
+- Else generate a short placeholder MP4 via `ffmpeg` (if available)
+
+Environment switches:
+
+```
+# prefer/disable runners
+MANIM_ENABLE_DOCKER=1           # set to 0 to skip docker
+MANIM_ENABLE_LOCAL=1            # set to 0 to skip local manim
+MANIM_ENABLE_PLACEHOLDER=1      # set to 0 to skip placeholder
+
+# tuning
+MANIM_DOCKER_IMAGE=manimcommunity/manim:stable
+MANIM_DOCKER_INSPECT_TIMEOUT_S=8
+MANIM_DOCKER_PULL_TIMEOUT_S=120
+MANIM_DOCKER_RUN_TIMEOUT_S=180
+MANIM_LOCAL_RUN_TIMEOUT_S=180
+MANIM_PLACEHOLDER_SECONDS=5
+MANIM_PLACEHOLDER_SIZE=1280x720
+```
+
+Common fixes for `Docker inspect timeout`:
+
+- Start Docker Desktop and retry.
+- Increase `MANIM_DOCKER_INSPECT_TIMEOUT_S`.
+- Or force fallback: set `MANIM_ENABLE_DOCKER=0` to use local/placeholder.
+- Ensure `ffmpeg` is installed for placeholder: `brew install ffmpeg`.
+
 ## CORS
 
 The app allows CORS from `FRONTEND_ORIGIN` (defaults to `http://localhost:3010`).

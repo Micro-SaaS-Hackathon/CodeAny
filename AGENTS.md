@@ -10,7 +10,7 @@
 ## Rendering Strategy
 - Landing/marketing routes (e.g., `/`, `/privacy`) use SSR/SSG (pre‑rendered) for performance.
 - Application routes under `/app/**` are client‑rendered only (no SSR). Nuxt `routeRules` and page `definePageMeta({ ssr: false })` enforce this.
-- Server middleware must not redirect `/app/**` during SSR; auth gating occurs client‑side after Supabase session initializes.
+- Server middleware must not redirect `/app/**` during SSR; auth gating occurs client-side after Supabase session initializes.
 
 ## Build, Test, and Development Commands
 - Env: `cp sample.env .env` then fill values.
@@ -42,3 +42,27 @@
 ## Security & Configuration Tips
 - Never commit secrets. `.env` is gitignored. Required: `SUPABASE_PROJECT_URL`, `SUPABASE_API_KEY`, `BACKEND_URL`; optional Convex vars.
 - CORS: frontend `http://localhost:3010`; backend default port `8000`.
+
+## Teacher Hub: Course Detail & Edit
+
+- UI Routes:
+  - `/app/courses/list` — table of courses with navigation to detail
+  - `/app/courses/[id]` — detail view with overview and modules, includes edit actions (course pencil and module pencils)
+- Frontend conventions:
+  - Uses Nuxt UI v4: `UCard`, `UButton`, `UBadge`, `UProgress`, `UModal`, `UForm`, `UInput`, `UTextarea`, `USelect`, `USkeleton`.
+  - Client-only rendering for `/app/**` via `definePageMeta({ ssr: false })` and `routeRules`.
+  - Composables in `composables/useCourses.ts` implement `getCourse`, `updateCourse`, `listModules`, `upsertModule`.
+- Backend endpoints:
+  - `GET /courses` · `POST /courses`
+  - `GET /courses/{course_id}` — CourseDetail
+  - `PATCH /courses/{course_id}` — update basics/metadata
+  - `GET /courses/{course_id}/modules` — list modules
+  - `PATCH /courses/{course_id}/modules/{module_id}` — upsert module
+- Convex functions (expected):
+  - `courses:list`, `courses:create`, `courses:get`, `courses:updateBasic`, `courses:createDetailed`, `courses:updateProgress`, `courses:finalize`
+  - `modules:listByCourse`, `modules:upsert`
+  - `stats:get`, `files:generateUploadUrl`
+
+Notes:
+- When Convex is not configured (`CONVEX_URL` unset), backend falls back to in-memory courses/modules; edits won’t persist across restarts.
+- Field mapping: Convex detailed fields (e.g., `levelLabel`, `durationWeeks`) are normalized in the API to snake_case (`level_label`, `duration_weeks`).

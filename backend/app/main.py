@@ -5,10 +5,24 @@ from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from .models import Course, CourseCreate, Stats, Activity, now_iso, AICourseRequest, AICourseResponse
+from .models import (
+    Course,
+    CourseCreate,
+    Stats,
+    Activity,
+    now_iso,
+    AICourseRequest,
+    AICourseResponse,
+    CourseDetail,
+    CourseUpdate,
+    Module,
+    ModuleUpdate,
+)
 from .convex_client import ConvexClient
 from .ai import run_course_build
 from .ai.logging_utils import get_logger
+from .ai.persist_convex import convex_generate_upload_url, convex_put_bytes
+import asyncio
 
 app = FastAPI(title="Cursly Teacher Hub API", version="0.1.0")
 
@@ -30,6 +44,8 @@ log = get_logger("api")
 # --- In-memory fallback (for local dev without Convex) ---
 _memory_courses: List[Course] = []
 _threads: Dict[str, Dict[str, Any]] = {}
+_memory_modules: Dict[str, List[Module]] = {}
+_memory_course_meta: Dict[str, Dict[str, Any]] = {}
 
 
 def _fallback_list_courses() -> List[Course]:
@@ -47,6 +63,7 @@ def _fallback_create_course(title: str) -> Course:
         status="draft",
     )
     _memory_courses.append(course)
+    _memory_course_meta[course.id] = {}
     return course
 
 
@@ -56,6 +73,32 @@ def _fallback_stats() -> Stats:
         Activity(course_id=c.id, event="created", timestamp=c.created_at) for c in _memory_courses[-5:]
     ]
     return Stats(total_courses=total, active_teachers=1 if total else 0, recent_activity=activities)
+
+
+def _fallback_get_course(course_id: str) -> Optional[CourseDetail]:
+    for c in _memory_courses:
+        if c.id == course_id:
+            mods = _memory_modules.get(course_id, [])
+            meta = _memory_course_meta.get(course_id, {})
+            # Provide default None for detail fields not tracked in memory
+            return CourseDetail(
+                id=c.id,
+                title=c.title,
+                progress=c.progress,
+                created_at=c.created_at,
+                updated_at=c.updated_at,
+                status=c.status,
+                description=meta.get("description"),
+                instructor=meta.get("instructor"),
+                audience=meta.get("audience"),
+                level_label=meta.get("level_label"),
+                duration_weeks=meta.get("duration_weeks"),
+                category=meta.get("category"),
+                age_range=meta.get("age_range"),
+                language=meta.get("language"),
+                modules=mods,
+            )
+    return None
 
 
 @app.get("/health")
@@ -140,6 +183,277 @@ async def create_course(payload: CourseCreate):
         except Exception as e:
             log.warning(f"Convex create_course error | err={e}")
     return _fallback_create_course(title)
+
+
+@app.get("/courses/{course_id}", response_model=CourseDetail)
+async def get_course_detail(course_id: str):
+    if convex.enabled:
+        try:
+            data = await convex.query("courses:get", {"id": course_id})
+            if not data:
+                raise HTTPException(status_code=404, detail="Course not found")
+            # Fetch modules
+            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
+            mods: List[Module] = []
+            if isinstance(mods_raw, list):
+                for m in mods_raw:
+                    if isinstance(m, dict):
+                        mods.append(Module(**m))
+            # Map fields and normalize names
+            detail = CourseDetail(
+                id=data.get("id"),
+                title=data.get("title"),
+                progress=data.get("progress", 0),
+                created_at=data.get("created_at") or now_iso(),
+                updated_at=data.get("updated_at") or now_iso(),
+                status=data.get("status", "draft"),
+                description=data.get("description"),
+                instructor=data.get("instructor"),
+                audience=data.get("audience"),
+                level_label=data.get("levelLabel"),
+                duration_weeks=data.get("durationWeeks"),
+                category=data.get("category"),
+                age_range=data.get("ageRange"),
+                language=data.get("language"),
+                modules=mods,
+            )
+            return detail
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.warning(f"Convex get_course_detail error | err={e}")
+    # fallback
+    detail = _fallback_get_course(course_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return detail
+
+
+@app.patch("/courses/{course_id}", response_model=CourseDetail)
+async def update_course(course_id: str, payload: CourseUpdate):
+    if convex.enabled:
+        try:
+            args: Dict[str, Any] = {"courseId": course_id}
+            # Map snake_case to Convex camelCase for detail fields
+            if payload.title is not None:
+                args["title"] = payload.title
+            if payload.status is not None:
+                args["status"] = payload.status
+            if payload.description is not None:
+                args["description"] = payload.description
+            if payload.instructor is not None:
+                args["instructor"] = payload.instructor
+            if payload.audience is not None:
+                args["audience"] = payload.audience
+            if payload.level_label is not None:
+                args["levelLabel"] = payload.level_label
+            if payload.duration_weeks is not None:
+                args["durationWeeks"] = payload.duration_weeks
+            if payload.category is not None:
+                args["category"] = payload.category
+            if payload.age_range is not None:
+                args["ageRange"] = payload.age_range
+            if payload.language is not None:
+                args["language"] = payload.language
+            await convex.mutation("courses:updateBasic", args)
+            # return fresh detail
+            return await get_course_detail(course_id)
+        except Exception as e:
+            log.warning(f"Convex update_course error | err={e}")
+    # fallback memory update
+    found = False
+    for i, c in enumerate(_memory_courses):
+        if c.id == course_id:
+            updated = Course(
+                id=c.id,
+                title=payload.title or c.title,
+                progress=c.progress,
+                created_at=c.created_at,
+                updated_at=now_iso(),
+                status=payload.status or c.status,
+            )
+            _memory_courses[i] = updated
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Course not found")
+    # update meta
+    meta = _memory_course_meta.setdefault(course_id, {})
+    for k in [
+        "description",
+        "instructor",
+        "audience",
+        "level_label",
+        "duration_weeks",
+        "category",
+        "age_range",
+        "language",
+    ]:
+        v = getattr(payload, k, None)
+        if v is not None:
+            meta[k] = v
+    _memory_course_meta[course_id] = meta
+    return _fallback_get_course(course_id)
+
+
+@app.get("/courses/{course_id}/modules", response_model=List[Module])
+async def list_modules(course_id: str):
+    if convex.enabled:
+        try:
+            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
+            items: List[Module] = []
+            if isinstance(mods_raw, list):
+                for m in mods_raw:
+                    if isinstance(m, dict):
+                        items.append(Module(**m))
+            return items
+        except Exception as e:
+            log.warning(f"Convex list_modules error | err={e}")
+    return _memory_modules.get(course_id, [])
+
+
+@app.get("/courses/{course_id}/modules/{module_id}", response_model=Module)
+async def get_module(course_id: str, module_id: str):
+    if convex.enabled:
+        try:
+            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
+            if isinstance(mods_raw, list):
+                for m in mods_raw:
+                    if isinstance(m, dict) and str(m.get("moduleId")) == str(module_id):
+                        return Module(**m)
+        except Exception as e:
+            log.warning(f"Convex get_module error | err={e}")
+    # fallback
+    mods = _memory_modules.get(course_id, [])
+    for m in mods:
+        if m.moduleId == str(module_id):
+            return m
+    raise HTTPException(status_code=404, detail="Module not found")
+
+
+@app.patch("/courses/{course_id}/modules/{module_id}", response_model=Module)
+async def upsert_module(course_id: str, module_id: str, payload: ModuleUpdate):
+    if convex.enabled:
+        try:
+            args: Dict[str, Any] = {"courseId": course_id, "moduleId": module_id}
+            for k in (
+                "title",
+                "outline",
+                "text",
+                "manimCode",
+                "imageStorageId",
+                "imageCaption",
+                "videoStorageId",
+            ):
+                v = getattr(payload, k, None)
+                if v is not None:
+                    args[k] = v
+            await convex.mutation("modules:upsert", args)
+            # Return the current module by refetching list and filtering
+            mods = await list_modules(course_id)
+            for m in mods:
+                if m.moduleId == module_id:
+                    return m
+            # If not found in list, construct from payload
+            return Module(courseId=course_id, moduleId=module_id, **payload.model_dump(exclude_none=True))
+        except Exception as e:
+            log.warning(f"Convex upsert_module error | err={e}")
+    # fallback in-memory upsert
+    mods = _memory_modules.setdefault(course_id, [])
+    existing = None
+    for i, m in enumerate(mods):
+        if m.moduleId == module_id:
+            existing = i
+            break
+    base = Module(courseId=course_id, moduleId=module_id)
+    data = base.model_dump()
+    data.update({k: v for k, v in payload.model_dump(exclude_none=True).items()})
+    mod = Module(**data)
+    if existing is not None:
+        mods[existing] = mod
+    else:
+        mods.append(mod)
+    _memory_modules[course_id] = mods
+    return mod
+
+
+@app.post("/courses/{course_id}/modules/{module_id}/recompile", response_model=Module)
+async def recompile_module(course_id: str, module_id: str):
+    # Resolve current module + manim code
+    manim_code: str = ""
+    module_title: str = f"Module {module_id}"
+    existing: Optional[Module] = None
+
+    if convex.enabled:
+        try:
+            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
+            if isinstance(mods_raw, list):
+                for m in mods_raw:
+                    if isinstance(m, dict) and str(m.get("moduleId")) == str(module_id):
+                        manim_code = str(m.get("manimCode") or "")
+                        module_title = str(m.get("title") or module_title)
+                        existing = Module(**m)
+                        break
+        except Exception as e:
+            log.warning(f"Convex fetch module for recompile failed | err={e}")
+    else:
+        # memory fallback
+        mods = _memory_modules.get(course_id, [])
+        for m in mods:
+            if m.moduleId == str(module_id):
+                manim_code = m.manimCode or ""
+                module_title = m.title or module_title
+                existing = m
+                break
+
+    # Compile
+    from .ai.compile_manim import compile_manim_to_mp4
+    try:
+        path = await asyncio.to_thread(compile_manim_to_mp4, str(module_id), manim_code)
+    except Exception as e:
+        log.warning(f"Manim compile exception | module={module_id} | err={e}")
+        path = None
+    if not path:
+        raise HTTPException(status_code=500, detail="Compile failed")
+
+    # Upload to Convex and patch module
+    updated: Optional[Module] = None
+    if convex.enabled:
+        try:
+            upload_url = await convex_generate_upload_url(convex)
+            if not upload_url:
+                raise RuntimeError("Upload URL unavailable")
+            with open(path, "rb") as f:
+                vid_bytes = f.read()
+            storage_id = await convex_put_bytes(upload_url, vid_bytes, content_type="video/mp4")
+            if not storage_id:
+                raise RuntimeError("Upload failed")
+            await convex.mutation("modules:upsert", {
+                "courseId": course_id,
+                "moduleId": module_id,
+                "videoStorageId": storage_id,
+            })
+            # refetch
+            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
+            if isinstance(mods_raw, list):
+                for m in mods_raw:
+                    if isinstance(m, dict) and str(m.get("moduleId")) == str(module_id):
+                        updated = Module(**m)
+                        break
+        except Exception as e:
+            log.warning(f"Convex upload/patch failed | module={module_id} | err={e}")
+            raise HTTPException(status_code=500, detail="Upload failed")
+    else:
+        # Update memory only; no hosting available
+        mods = _memory_modules.setdefault(course_id, [])
+        for i, m in enumerate(mods):
+            if m.moduleId == str(module_id):
+                mods[i] = Module(**{**m.model_dump(), **{"videoStorageId": None}})
+                updated = mods[i]
+                break
+        _memory_modules[course_id] = mods
+
+    return updated or existing or Module(courseId=course_id, moduleId=str(module_id))
 
 
 @app.get("/stats", response_model=Stats)
@@ -316,3 +630,17 @@ async def ai_stream(thread_id: str):
                 break
             await _asyncio.sleep(1)
     return StreamingResponse(event_gen(), media_type="text/event-stream")
+
+
+@app.get("/files/convex-url")
+async def get_convex_file_url(storageId: str):
+    if not storageId:
+        raise HTTPException(status_code=400, detail="storageId required")
+    if convex.enabled:
+        try:
+            url = await convex.run("files:getUrl", {"storageId": storageId})
+            if isinstance(url, str) and url:
+                return {"url": url}
+        except Exception as e:
+            log.warning(f"Convex getUrl error | id={storageId} | err={e}")
+    raise HTTPException(status_code=404, detail="URL not available")

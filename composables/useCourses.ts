@@ -1,5 +1,5 @@
 import { useRuntimeConfig } from '#imports'
-import type { Course } from '~/types/course'
+import type { Course, CourseDetail, Module } from '~/types/course'
 
 export function useCourses() {
   const config = useRuntimeConfig()
@@ -18,6 +18,45 @@ export function useCourses() {
       method: 'POST',
       body: { title }
     })
+  }
+
+  async function getCourse(id: string): Promise<CourseDetail> {
+    return await $fetch<CourseDetail>(`${base}/courses/${id}`, { method: 'GET' })
+  }
+
+  type CourseUpdate = Partial<Pick<CourseDetail, 'title' | 'status' | 'description' | 'instructor' | 'audience' | 'level_label' | 'duration_weeks' | 'category' | 'age_range' | 'language'>>
+
+  async function updateCourse(id: string, payload: CourseUpdate): Promise<CourseDetail> {
+    return await $fetch<CourseDetail>(`${base}/courses/${id}`, {
+      method: 'PATCH',
+      body: payload
+    })
+  }
+
+  async function listModules(courseId: string): Promise<Module[]> {
+    return await $fetch<Module[]>(`${base}/courses/${courseId}/modules`, { method: 'GET' })
+  }
+
+  async function getModule(courseId: string, moduleId: string): Promise<Module> {
+    return await $fetch<Module>(`${base}/courses/${courseId}/modules/${moduleId}`, { method: 'GET' })
+  }
+
+  async function upsertModule(courseId: string, moduleId: string, payload: Partial<Module>): Promise<Module> {
+    return await $fetch<Module>(`${base}/courses/${courseId}/modules/${moduleId}`, {
+      method: 'PATCH',
+      body: payload
+    })
+  }
+
+  async function getConvexFileUrl(storageId: string): Promise<string | null> {
+    try {
+      const data = await $fetch<{ url: string }>(`${base}/files/convex-url`, { method: 'GET', query: { storageId } })
+      return data?.url || null
+    } catch { return null }
+  }
+
+  async function recompileModule(courseId: string, moduleId: string): Promise<Module> {
+    return await $fetch<Module>(`${base}/courses/${courseId}/modules/${moduleId}/recompile`, { method: 'POST' })
   }
 
   type AICourseRequest = {
@@ -117,5 +156,5 @@ export function useCourses() {
     return () => { if (timer) clearTimeout(timer) }
   }
 
-  return { listCourses, createCourse, createCourseAI, fetchCategories, watchCourseProgress }
+  return { listCourses, createCourse, createCourseAI, fetchCategories, watchCourseProgress, getCourse, updateCourse, listModules, getModule, upsertModule, getConvexFileUrl, recompileModule }
 }

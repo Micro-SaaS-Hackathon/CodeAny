@@ -66,6 +66,7 @@ New authenticated area for teachers:
 
 - `GET /app/dashboard` — Dashboard with stats, welcome CTA, and global "Create Course" action.
 - `GET /app/courses/list` — Courses table (title, progress, status, created/updated) with "Create Course".
+- `GET /app/courses/[id]` — Course detail view with overview and modules; includes edit actions.
 
 Both pages use a shared layout `layouts/app.vue` (topbar with logo/search/Create Course/avatar + slim left sidebar navigation) powered by Nuxt UI v4 Dashboard components.
 
@@ -185,6 +186,10 @@ Endpoints used by the Teacher Hub UI:
 
 - `GET /courses` — Returns an array of Course objects (see schema below)
 - `POST /courses` — Creates a new course with `{ title }`
+- `GET /courses/{course_id}` — Returns CourseDetail including optional metadata and modules
+- `PATCH /courses/{course_id}` — Updates course basics (title, status, description, etc.)
+- `GET /courses/{course_id}/modules` — Lists modules for a course
+- `PATCH /courses/{course_id}/modules/{module_id}` — Upserts a module (title, text, outline, etc.)
 - `GET /stats` — Returns dashboard stats with recent activity
 
 Course object schema:
@@ -233,9 +238,12 @@ This repo includes a minimal Convex app in `convex/` implementing the functions 
 
 - `courses:list` (query)
 - `courses:create` (mutation)
+- `courses:get` (query) — fetch a course by public `id` with detailed fields
+- `courses:updateBasic` (mutation) — update basic fields (title/status/metadata)
 - `courses:createDetailed` (mutation)
 - `courses:updateProgress` (mutation)
 - `courses:finalize` (mutation)
+- `modules:listByCourse` (query)
 - `modules:upsert` (mutation)
 - `stats:get` (query)
 - `files:generateUploadUrl` (action)
@@ -265,7 +273,13 @@ Verify connectivity:
 
 - Start the backend: `uvicorn backend.app.main:app --reload --port 8000 --env-file .env --reload-exclude tmp/manim_runs`
 - Open `GET /convex/diagnostics` — it should show `query_ok: true` and `run_ok: true` once deployed.
-- Try `GET /courses` and `POST /courses` from the UI or curl.
+- Try `GET /courses`, `POST /courses`, and the new detail routes `GET /courses/{id}`, `PATCH /courses/{id}` from the UI or curl.
+
+### Course Detail & Edit (UI usage)
+
+- Navigate to `Teacher Hub → Courses` and click a row to open `/app/courses/{id}`.
+- Use the pencil icon in the top-right to edit title, status, and metadata.
+- In the Modules section, use the per-row pencil to edit module title/text. Additional fields (outline/manim/media) can be added similarly.
 
 ## Deployment
 
