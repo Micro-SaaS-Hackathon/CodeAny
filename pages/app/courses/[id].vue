@@ -344,6 +344,17 @@ watch(() => route.params.id, (v) => { id.value = String(v || ''); load() })
                     <UTextarea v-model="moduleDraft.text" :rows="18" size="lg" class="w-full min-h-[360px]" autoresize placeholder="# Heading\n\nWrite your content..." />
                     <div class="w-full min-h-[360px] rounded-lg border border-default bg-white dark:bg-gray-900 p-4 overflow-auto prose prose-sm max-w-none" v-html="mdHtml" />
                   </div>
+                  <UFormField label="Manim Code" help="Adjust the generated scene before hitting Recompile. Stored in Convex with the module.">
+                    <UTextarea
+                      v-model="moduleDraft.manimCode"
+                      :rows="18"
+                      size="lg"
+                      class="w-full min-h-[320px] font-mono text-sm"
+                      autoresize
+                      spellcheck="false"
+                      placeholder="from manim import *\n\nclass Lesson(Scene):\n    def construct(self):\n        ..."
+                    />
+                  </UFormField>
                   <div class="flex items-center justify-between gap-2">
                     <p class="text-xs text-dimmed">Tip: Press <kbd class="px-1 py-0.5 rounded border">Cmd/Ctrl + S</kbd> to save</p>
                     <div class="flex gap-2">

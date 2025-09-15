@@ -6,7 +6,7 @@ import tempfile
 import threading
 from pathlib import Path
 import sys
-from .logging_utils import get_logger
+from .logging_utils import get_logger, preview
 import time
 from typing import Optional
 from contextlib import contextmanager
@@ -14,6 +14,26 @@ from contextlib import contextmanager
 log = get_logger("compile")
 _compile_sem: Optional[threading.BoundedSemaphore] = None
 _PROC_CWD: Path = Path.cwd().resolve()
+
+
+def _read_source_snippet(pyfile: Path, lines: int = 40) -> str:
+    try:
+        text = pyfile.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    snippet_lines = text.splitlines()[:lines]
+    return "\n".join(f"{idx + 1:03}: {line}" for idx, line in enumerate(snippet_lines))
+
+
+def _write_failure_trace(work: Path, module_id: str, stderr: str) -> None:
+    if not stderr:
+        return
+    try:
+        path = work / f"{module_id}_stderr.log"
+        path.write_text(stderr, encoding="utf-8", errors="ignore")
+        log.info(f"Manim stderr saved | module={module_id} | path={path}")
+    except Exception:
+        pass
 
 
 def _get_compile_sem() -> threading.BoundedSemaphore:
@@ -221,7 +241,16 @@ def _try_local_manim(work: Path, module_id: str, pyfile: Path, mp4_name: str) ->
         log.warning(f"Local manim timeout | module={module_id}")
         return None
     except subprocess.CalledProcessError as e:
-        log.warning(f"Local manim error | module={module_id} | err={e} | stderr={(e.stderr or '')[:240]}")
+        snippet = _read_source_snippet(pyfile)
+        if snippet:
+            log.warning(f"Local manim error snippet | module={module_id}\n{snippet}")
+        if e.stdout:
+            log.warning(f"Local manim error stdout | module={module_id} | preview={e.stdout[:400]}")
+        if e.stderr:
+            log.warning(f"Local manim error stderr | module={module_id} | preview={e.stderr[:400]}")
+            _write_failure_trace(work, module_id, e.stderr)
+        else:
+            log.warning(f"Local manim error | module={module_id} | err={e}")
         return None
     except Exception as e:
         log.warning(f"Local manim exec error | module={module_id} | err={e}")
@@ -295,7 +324,7 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
             )
 
         pyfile.write_text(code, encoding="utf-8")
-        log.info(f"Manim compile start | module={module_id} | workdir={str(work)} | file={pyfile.name}")
+        log.info(f"Manim compile start | module={module_id} | workdir={str(work)} | file={pyfile.name} | code_preview={preview(code)}")
 
         def _check_outputs() -> Optional[str]:
             out = work / "media" / "videos" / pyfile.stem / "480p15" / mp4_name
@@ -354,7 +383,16 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
             except subprocess.TimeoutExpired:
                 log.warning(f"Manim docker timeout | module={module_id}")
             except subprocess.CalledProcessError as e:
-                log.warning(f"Manim compile error | module={module_id} | err={e} | stderr={(e.stderr or '')[:240]}")
+                snippet = _read_source_snippet(pyfile)
+                if snippet:
+                    log.warning(f"Manim docker error snippet | module={module_id}\n{snippet}")
+                if e.stdout:
+                    log.warning(f"Manim docker error stdout | module={module_id} | preview={e.stdout[:400]}")
+                if e.stderr:
+                    log.warning(f"Manim docker error stderr | module={module_id} | preview={e.stderr[:400]}")
+                    _write_failure_trace(work, module_id, e.stderr)
+                else:
+                    log.warning(f"Manim docker error | module={module_id} | err={e}")
             except Exception as e:
                 log.warning(f"Manim compile error | module={module_id} | err={e}")
         else:
@@ -368,6 +406,7 @@ def compile_manim_to_mp4(module_id: str, manim_code: str) -> Optional[str]:
 
         # Placeholder as last resort
         if use_placeholder:
+            log.warning(f"Manim falling back to placeholder video | module={module_id}")
             ph = _try_ffmpeg_placeholder(work, module_id, mp4_name, title=f"Lesson {module_id}")
             if ph:
                 return ph

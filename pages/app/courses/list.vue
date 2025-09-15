@@ -7,7 +7,7 @@ import { useRoute } from '#app'
 // Render this page client-side only to avoid any SSR/hydration issues
 definePageMeta({ layout: 'app', ssr: false })
 
-const { listCourses, watchCourseProgress } = useCourses()
+const { listCourses, watchCourseProgress, isCourseInFlight, isCourseErrored, courseStatusLabel, courseStatusColor } = useCourses()
 
 const loading = ref(true)
 const courses = ref<Course[]>([])
@@ -102,12 +102,23 @@ onUnmounted(() => { stopPoll && stopPoll() })
                 </td>
                 <td class="px-2 sm:px-3 py-2 hidden sm:table-cell">
                   <div class="flex items-center gap-2 sm:gap-3 w-32 sm:w-56">
-                    <UProgress :value="row.progress" class="flex-1" />
+                    <template v-if="isCourseInFlight(row)">
+                      <UProgress :value="row.progress" class="flex-1" />
+                    </template>
+                    <template v-else>
+                      <div class="flex-1 h-2 rounded-full bg-muted/50 overflow-hidden">
+                        <div
+                          class="h-full transition-none"
+                          :class="isCourseErrored(row) ? 'bg-red-500 dark:bg-red-500' : 'bg-primary'"
+                          :style="{ width: `${Math.min(100, Math.max(0, row.progress ?? 0))}%` }"
+                        />
+                      </div>
+                    </template>
                     <span class="text-xs sm:text-sm text-toned w-8 sm:w-10 text-right">{{ row.progress }}%</span>
                   </div>
                 </td>
                 <td class="px-2 sm:px-3 py-2">
-                  <UBadge :color="row.status === 'ready' || row.status === 'published' ? 'green' : (row.status === 'failed' ? 'red' : 'gray')" :label="row.status" size="xs" class="sm:text-sm" />
+                  <UBadge :color="courseStatusColor(row)" :label="courseStatusLabel(row)" size="xs" class="sm:text-sm" />
                 </td>
                 <td class="px-2 sm:px-3 py-2 hidden md:table-cell text-xs sm:text-sm">{{ fmt(row.created_at) }}</td>
                 <td class="px-2 sm:px-3 py-2 hidden lg:table-cell text-xs sm:text-sm">{{ fmt(row.updated_at) }}</td>

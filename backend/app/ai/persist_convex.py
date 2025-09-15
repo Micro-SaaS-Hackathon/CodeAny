@@ -127,18 +127,21 @@ async def persist_course_and_modules(
 
             # Upsert module document
             try:
+                manim_code = m.get("manim_code", "")
                 await convex.mutation("modules:upsert", {
                     "courseId": course_id,
                     "moduleId": mid,
                     "title": m.get("title"),
                     "outline": m.get("outline", []),
                     "text": m.get("text", ""),
-                    "manimCode": m.get("manim_code", ""),
+                    "manimCode": manim_code,
                     "imageStorageId": storage_ids[str(mid)]["image"],
                     "imageCaption": m.get("gemini_output", {}).get("gemini_image_caption"),
                     "videoStorageId": storage_ids[str(mid)]["video"],
                 })
-                log.info(f"Convex upsert module ok | module={mid}")
+                log.info(
+                    f"Convex upsert module ok | module={mid} | manim_code_len={len(manim_code or '')}"
+                )
             except Exception:
                 pass
 

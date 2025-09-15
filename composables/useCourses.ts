@@ -1,6 +1,36 @@
 import { useRuntimeConfig } from '#imports'
 import type { Course, CourseDetail, Module } from '~/types/course'
 
+const MIN_POLL_INTERVAL = 6000
+const TERMINAL_STATUSES = new Set(['ready', 'published', 'failed', 'stopped', 'error', 'cancelled', 'canceled', 'aborted', 'complete', 'completed'])
+const ERROR_STATUSES = new Set(['failed', 'error', 'stopped', 'cancelled', 'canceled', 'aborted'])
+
+function normalizeStatus(status?: string | null): string {
+  return String(status || '').trim().toLowerCase()
+}
+
+function cloneCourses(rows: Course[]): Course[] {
+  return rows.map(row => ({ ...row }))
+}
+
+function hasMeaningfulChange(prev: Course[], next: Course[]): boolean {
+  if (prev.length !== next.length) return true
+  const prevMap = new Map(prev.map(course => [course.id, course]))
+  for (const course of next) {
+    const existing = prevMap.get(course.id)
+    if (!existing) return true
+    if ((existing.progress ?? 0) !== (course.progress ?? 0)) return true
+    if (normalizeStatus(existing.status) !== normalizeStatus(course.status)) return true
+    if ((existing.updated_at || '') !== (course.updated_at || '')) return true
+  }
+  return false
+}
+
+function clampProgress(value: number | undefined): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return 0
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
 export function useCourses() {
   const config = useRuntimeConfig()
   const base = config.public.backendUrl
@@ -143,18 +173,85 @@ export function useCourses() {
     }
   }
 
-  function watchCourseProgress(intervalMs = 4000, onUpdate?: (courses: Course[]) => void) {
-    let timer: any
-    const start = async () => {
-      try {
-        const list = await listCourses()
-        onUpdate?.(list)
-      } catch {}
-      timer = setTimeout(start, intervalMs)
-    }
-    start()
-    return () => { if (timer) clearTimeout(timer) }
+  function isCourseInFlight(course: Course): boolean {
+    const status = normalizeStatus(course.status)
+    if (TERMINAL_STATUSES.has(status)) return false
+    return clampProgress(course.progress) < 100
   }
 
-  return { listCourses, createCourse, createCourseAI, fetchCategories, watchCourseProgress, getCourse, updateCourse, listModules, getModule, upsertModule, getConvexFileUrl, recompileModule }
+  function isCourseErrored(course: Course): boolean {
+    return ERROR_STATUSES.has(normalizeStatus(course.status))
+  }
+
+  function courseStatusLabel(course: Course): string {
+    const status = normalizeStatus(course.status)
+    if (ERROR_STATUSES.has(status)) return 'Stopped'
+    if (status === 'ready' || status === 'published') return 'Ready'
+    if (status === 'creating') return 'Creating'
+    if (status === 'rendering') return 'Rendering'
+    if (status === 'uploading') return 'Uploading'
+    if (!status) return 'Draft'
+    const words = status.replace(/[_-]+/g, ' ').split(' ').filter(Boolean)
+    return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  }
+
+  function courseStatusColor(course: Course): 'gray' | 'green' | 'red' | 'blue' {
+    const status = normalizeStatus(course.status)
+    if (ERROR_STATUSES.has(status)) return 'red'
+    if (status === 'ready' || status === 'published') return 'green'
+    if (status === 'creating' || status === 'rendering' || status === 'uploading') return 'blue'
+    return 'gray'
+  }
+
+  function watchCourseProgress(intervalMs = MIN_POLL_INTERVAL, onUpdate?: (courses: Course[]) => void) {
+    const baseInterval = Math.max(intervalMs, MIN_POLL_INTERVAL)
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let lastSnapshot: Course[] = []
+
+    const poll = async () => {
+      try {
+        const list = await listCourses()
+        const normalized = Array.isArray(list) ? list : []
+        const snapshot = cloneCourses(normalized)
+        const shouldUpdate = hasMeaningfulChange(lastSnapshot, snapshot)
+        lastSnapshot = snapshot
+        if (shouldUpdate) {
+          onUpdate?.(cloneCourses(snapshot))
+        }
+        if (normalized.some(isCourseInFlight)) {
+          timer = setTimeout(poll, baseInterval)
+        } else {
+          timer = null
+        }
+      } catch (err) {
+        timer = setTimeout(poll, baseInterval)
+      }
+    }
+
+    poll()
+
+    return () => {
+      if (timer) clearTimeout(timer)
+      timer = null
+    }
+  }
+
+  return {
+    listCourses,
+    createCourse,
+    createCourseAI,
+    fetchCategories,
+    watchCourseProgress,
+    getCourse,
+    updateCourse,
+    listModules,
+    getModule,
+    upsertModule,
+    getConvexFileUrl,
+    recompileModule,
+    isCourseInFlight,
+    isCourseErrored,
+    courseStatusLabel,
+    courseStatusColor,
+  }
 }

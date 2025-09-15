@@ -5,6 +5,7 @@ from typing import Dict, Any
 
 from ..llm import openrouter_chat
 from ..logging_utils import get_logger, preview
+from ..resources import MANIM_DOC_EXCERPTS
 
 log = get_logger("nodes.manim")
 from ..clients import env_models
@@ -301,6 +302,8 @@ def manim_prompt(module: Dict[str, Any], language: str, narrative_text: str | No
         f"Narrative language: {language}\n"
         f"Class name must be Lesson.\n"
         f"Style: teacher explains with brief on-screen captions and simple, clear visuals.\n"
+        "Reference the following Manim documentation summary when choosing APIs:\n"
+        f"{MANIM_DOC_EXCERPTS}\n"
         "Return only Python source code without Markdown or commentary. Start with `from manim import *`.\n"
     )
     if narrative_text:
