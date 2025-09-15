@@ -1,0 +1,34 @@
+# Global ignores
+.git
+.github
+.gitignore
+.DS_Store
+.idea
+.vscode
+
+# Node / Nuxt
+node_modules
+.nuxt
+.output
+.nitro
+.dist
+.cache
+
+# Python
+.venv
+__pycache__
+*.pyc
+
+# Env and secrets
+.env
+*.env
+sample.env
+
+# Temp and logs
+tmp/
+logs/
+**/tmp/
+**/logs/
+
+# Misc
+presentation/

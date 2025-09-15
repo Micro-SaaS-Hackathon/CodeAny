@@ -1,0 +1,53 @@
+version: "3.9"
+
+name: cursly
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: cursly-backend
+    profiles: ["backend", "full"]
+    env_file:
+      - .env
+    environment:
+      # Sensible defaults; override in .env when needed
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3010}
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    networks:
+      - cursly
+
+  frontend:
+    image: node:20-alpine
+    container_name: cursly-frontend
+    profiles: ["frontend", "full"]
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      # Must be browser-reachable. For full stack compose, default to localhost.
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
+      HOST: 0.0.0.0
+      NUXT_PORT: 3010
+    ports:
+      - "3010:3010"
+    volumes:
+      - .:/app
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev"
+    restart: unless-stopped
+    networks:
+      - cursly
+
+networks:
+  cursly:
+    driver: bridge
+
+volumes:
+  frontend_node_modules:
+    driver: local

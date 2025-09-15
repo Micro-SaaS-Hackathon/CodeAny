@@ -19,6 +19,45 @@
 - Backend dev: `python3 -m venv .venv && source .venv/bin/activate` · `pip install -r backend/requirements.txt` · `uvicorn backend.app.main:app --reload --port 8000`
 - Tests: none configured yet.
 
+### Docker Compose (preferred for unified dev)
+
+Profiles are provided in a single `docker-compose.yml`:
+
+- `backend` — FastAPI only (port 8000)
+- `frontend` — Nuxt only (port 3010)
+- `full` — backend + frontend
+
+Commands:
+
+- Backend only
+  ```bash
+docker compose --profile backend up --build
+# http://localhost:8000
+```
+
+- Frontend only (expects `BACKEND_URL` reachable from the browser)
+  ```bash
+docker compose --profile frontend up --build
+# http://localhost:3010
+```
+
+- Full stack
+  ```bash
+docker compose --profile full up --build
+# Frontend: http://localhost:3010
+# Backend:  http://localhost:8000
+```
+
+Notes:
+- The repo is mounted into containers for hot reload.
+- `frontend_node_modules` is a named volume to cache installs.
+- Manim inside containers should use local mode (disable Docker-in-Docker):
+  ```env
+MANIM_ENABLE_DOCKER=0
+MANIM_ENABLE_LOCAL=1
+MANIM_LOCAL_FIRST=1
+```
+
 ## Coding Style & Naming Conventions
 - Vue/TS: 2‑space indent, `script setup`, strict TypeScript. Page files kebab‑case (e.g., `confirm.vue`), composables `useX.ts` (e.g., `useCourses.ts`), types in `types/*.ts` (PascalCase types/interfaces).
 - Components (if added): PascalCase filenames and names.
@@ -40,8 +79,11 @@
   - Small, focused scope; avoid unrelated refactors.
 
 ## Security & Configuration Tips
-- Never commit secrets. `.env` is gitignored. Required: `SUPABASE_PROJECT_URL`, `SUPABASE_API_KEY`, `BACKEND_URL`; optional Convex vars.
-- CORS: frontend `http://localhost:3010`; backend default port `8000`.
+- Never commit secrets. `.env` is gitignored and excluded from Docker build context via `.dockerignore`.
+- Required envs: `SUPABASE_PROJECT_URL`, `SUPABASE_API_KEY`, `BACKEND_URL`.
+- Optional Convex envs: `CONVEX_URL`, `CONVEX_USER_BEARER`, `CONVEX_DEPLOY_KEY`.
+- CORS: set `FRONTEND_ORIGIN` (or comma-separated `FRONTEND_ORIGINS`) for allowed origins. Default is `http://localhost:3010`.
+- Convex HTTP endpoints are standardized to `/api/query`, `/api/mutation`, and `/api/run/{namespace/function}`; `.convex.site` is normalized to `.convex.cloud`.
 
 ## Teacher Hub: Course Detail & Edit
 

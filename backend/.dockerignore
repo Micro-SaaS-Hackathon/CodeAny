@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+
+# Logs and temp
+logs/
+**/logs/
+tmp/
+**/tmp/
+
+# Env files
+.env
+*.env
+
+# Local cache
+.cache/

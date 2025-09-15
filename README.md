@@ -178,6 +178,93 @@ supabase db push
 
 After this, the footer newsletter form will upsert emails into `public.newsletter_subscribers`.
 
+## Docker & Docker Compose
+
+This repo includes a `docker-compose.yml` configured with profiles to run three modes using the same file:
+
+- Backend only
+- Frontend only
+- Full stack (backend + frontend)
+
+Prerequisites:
+- Docker Desktop 4.30+ or Docker Engine 24+
+- Copy env: `cp sample.env .env` and fill at least:
+  - `SUPABASE_PROJECT_URL`, `SUPABASE_API_KEY` (for auth-enabled pages)
+  - `BACKEND_URL` (frontend uses this; default is `http://localhost:8000`)
+  - Optional Convex: `CONVEX_URL` (+ `CONVEX_USER_BEARER` or `CONVEX_DEPLOY_KEY` if needed)
+
+Notes:
+- The frontend runs `npm run dev` on port 3010 with hot reload.
+- The backend runs Uvicorn on port 8000 with `--reload` and excludes `tmp/manim_runs` from watcher.
+- CORS is controlled by `FRONTEND_ORIGIN` (defaults to `http://localhost:3010`).
+
+Profiles and commands:
+
+- Backend only
+  ```bash
+  docker compose --profile backend up --build
+  # API: http://localhost:8000
+  ```
+
+- Frontend only (expects a reachable backend at BACKEND_URL)
+  ```bash
+  # Ensure .env has BACKEND_URL set (defaults to http://localhost:8000)
+  docker compose --profile frontend up --build
+  # App: http://localhost:3010
+  ```
+
+- Full stack (backend + frontend)
+  ```bash
+  docker compose --profile full up --build
+  # Frontend: http://localhost:3010
+  # Backend:  http://localhost:8000
+  ```
+
+Environment variables used in Docker:
+
+- Frontend container
+  - `BACKEND_URL` is injected into Nuxt runtime config (see `nuxt.config.ts` `runtimeConfig.public.backendUrl`).
+    - Default in compose is `http://localhost:8000` so the browser can reach the backend mapped on the host.
+  - `SUPABASE_PROJECT_URL`, `SUPABASE_API_KEY` are forwarded to the Nuxt module.
+
+- Backend container
+  - `FRONTEND_ORIGIN` defaults to `http://localhost:3010` (CORS allowlist).
+  - `FRONTEND_ORIGINS` can accept a comma-separated list for multi-origin dev.
+  - Convex envs (`CONVEX_URL`, `CONVEX_USER_BEARER`, `CONVEX_DEPLOY_KEY`) are forwarded as-is.
+  - Manim tuning envs are supported (see below) but Docker-in-Docker is off by default in compose.
+
+Development volumes:
+
+- The entire repo is mounted into both containers at `/app` for hot reload.
+- A named volume `frontend_node_modules` prevents host/guest permission issues and speeds up installs.
+
+Manim in Docker (video generation):
+
+- The backend can attempt to run Manim via Docker or locally. Inside a container you typically cannot spawn nested Docker.
+- For compose usage, set the following in `.env`:
+  ```env
+  MANIM_ENABLE_DOCKER=0
+  MANIM_ENABLE_LOCAL=1
+  MANIM_LOCAL_FIRST=1
+  # Optionally set MANIM_LOCAL_PYTHON or MANIM_LOCAL_BIN if you bake Manim into the image
+  ```
+- If you do want Docker-based Manim, mount the host Docker socket (advanced, not recommended for general dev):
+  ```yaml
+  services:
+    backend:
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+  ```
+  You may also need to install docker CLI in the backend image.
+
+Stop & clean up:
+```bash
+# Stop containers
+docker compose --profile full down
+# Remove volumes if needed (clears node_modules cache volume)
+docker volume rm cursly_frontend_node_modules || true
+```
+
 ## Backend (FastAPI + Convex)
 
 All backend code lives in `backend/`.
