@@ -38,7 +38,14 @@ class CourseState(TypedDict, total=False):
     course_package: Dict[str, Any]
 
 
-async def build_course_graph(state: CourseState, *, convex: ConvexClient, progress_cb=None, existing_course_id: Optional[str] = None) -> Dict[str, Any]:
+async def build_course_graph(
+    state: CourseState,
+    *,
+    convex: ConvexClient,
+    owner_id: Optional[str],
+    progress_cb=None,
+    existing_course_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """High-level orchestration of course generation.
 
     Uses async fan-out to generate per-module assets, then compiles Manim and persists.
@@ -167,8 +174,16 @@ async def build_course_graph(state: CourseState, *, convex: ConvexClient, progre
                     "status": "uploading",
                     "progress": 80,
                 }
+                if owner_id:
+                    course_payload["ownerId"] = owner_id
                 log.info("Persist start")
-                pr = await persist_course_and_modules(convex=convex, course_payload=course_payload, modules=mods_list, existing_course_id=existing_course_id)
+                pr = await persist_course_and_modules(
+                    convex=convex,
+                    course_payload=course_payload,
+                    modules=mods_list,
+                    existing_course_id=existing_course_id,
+                    owner_id=owner_id,
+                )
                 log.info("Persist done")
                 state_in["course_package"] = {
                     "topic": topic_l,
@@ -312,8 +327,15 @@ async def run_course_build(
     level: str,
     constraints: Dict[str, Any],
     convex: ConvexClient,
+    owner_id: Optional[str],
     progress_cb=None,
     existing_course_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     state: CourseState = {"topic": topic, "level": level, "constraints": constraints}
-    return await build_course_graph(state, convex=convex, progress_cb=progress_cb, existing_course_id=existing_course_id)
+    return await build_course_graph(
+        state,
+        convex=convex,
+        owner_id=owner_id,
+        progress_cb=progress_cb,
+        existing_course_id=existing_course_id,
+    )

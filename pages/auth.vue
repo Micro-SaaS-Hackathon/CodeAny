@@ -145,176 +145,197 @@ async function onGoogleSignIn() {
 </script>
 
 <template>
-  <main class="bg-default text-default min-h-screen flex items-center justify-center py-6">
-    <div class="w-full max-w-md px-4">
-      <!-- Logo and branding -->
-      <div class="flex justify-center mb-6">
-        <div class="flex flex-col items-center">
-          <img src="~/assets/images/cursly-logo-small.png" alt="Cursly logo" class="h-16 w-auto mb-2" />
-          <h1 class="text-h3 text-highlighted font-bold">Cursly</h1>
-          <p class="text-sm text-muted mt-1">Build courses in minutes</p>
-        </div>
-      </div>
-      
-      <UCard class="border-0 shadow-lg overflow-hidden">
-        <!-- Tab navigation -->
-        <div class="flex">
-          <button 
-            class="flex-1 py-3 px-4 text-center transition-all" 
-            :class="activeTab === 'signin' ? 'text-primary font-medium' : 'text-muted hover:text-highlighted'" 
-            @click="activeTab = 'signin'"
-          >
-            Sign In
-          </button>
-          <button 
-            class="flex-1 py-3 px-4 text-center transition-all" 
-            :class="activeTab === 'signup' ? 'text-primary font-medium' : 'text-muted hover:text-highlighted'" 
-            @click="activeTab = 'signup'"
-          >
-            Create Account
-          </button>
-        </div>
-        
-        <!-- Active tab indicator -->
-        <div class="relative h-0.5 bg-gray-100 dark:bg-gray-800">
-          <div 
-            class="absolute h-0.5 bg-primary transition-all duration-300 ease-in-out" 
-            :style="{ width: '50%', left: activeTab === 'signin' ? '0' : '50%' }"
-          ></div>
-        </div>
-
-        <div class="p-6">
-          <!-- Sign In Form -->
-          <div v-if="activeTab === 'signin'" class="space-y-5">
-            <div class="space-y-4">
-              <div>
-                <UInput 
-                  v-model="email" 
-                  type="email" 
-                  placeholder="you@example.com" 
-                  icon="i-lucide-mail" 
-                  size="lg"
-                  :color="emailError ? 'red' : undefined"
-                  @blur="validateEmail"
-                  class="auth-input"
-                />
-                <p v-if="emailError" class="text-xs text-red-500 mt-1 ml-1">{{ emailError }}</p>
-              </div>
-              
-              <div>
-                <UInput 
-                  v-model="password" 
-                  type="password" 
-                  placeholder="••••••••" 
-                  icon="i-lucide-lock" 
-                  size="lg"
-                  :color="passwordError ? 'red' : undefined"
-                  @blur="validatePassword"
-                  class="auth-input"
-                />
-                <p v-if="passwordError" class="text-xs text-red-500 mt-1 ml-1">{{ passwordError }}</p>
-              </div>
-            </div>
-
-            <UButton 
-              block
-              size="lg"
-              :loading="loadingSignIn" 
-              :loading-auto="true" 
-              color="primary" 
-              label="Sign in" 
-              @click="onEmailSignIn" 
-              class="mt-6"
-            />
-            
-            <div class="text-center">
-              <button class="text-sm text-primary hover:underline">Forgot password?</button>
-            </div>
-          </div>
-
-          <!-- Sign Up Form -->
-          <div v-if="activeTab === 'signup'" class="space-y-5">
-            <div class="space-y-4">
-              <div>
-                <UInput 
-                  v-model="email" 
-                  type="email" 
-                  placeholder="you@example.com" 
-                  icon="i-lucide-mail" 
-                  size="lg"
-                  :color="emailError ? 'red' : undefined"
-                  @blur="validateEmail"
-                  class="auth-input"
-                />
-                <p v-if="emailError" class="text-xs text-red-500 mt-1 ml-1">{{ emailError }}</p>
-              </div>
-              
-              <div>
-                <UInput 
-                  v-model="password" 
-                  type="password" 
-                  placeholder="••••••••" 
-                  icon="i-lucide-lock" 
-                  size="lg"
-                  :color="passwordError ? 'red' : undefined"
-                  @blur="validatePassword"
-                  class="auth-input"
-                />
-                <p v-if="passwordError" class="text-xs text-red-500 mt-1 ml-1">{{ passwordError }}</p>
-              </div>
-              
-              <div>
-                <UInput 
-                  v-model="confirmPassword" 
-                  type="password" 
-                  placeholder="••••••••" 
-                  icon="i-lucide-shield-check" 
-                  size="lg"
-                  :color="confirmPasswordError ? 'red' : undefined"
-                  @blur="validateConfirmPassword"
-                  class="auth-input"
-                />
-                <p v-if="confirmPasswordError" class="text-xs text-red-500 mt-1 ml-1">{{ confirmPasswordError }}</p>
-              </div>
-            </div>
-
-            <UButton 
-              block
-              size="lg"
-              :loading="loadingSignUp" 
-              :loading-auto="true" 
-              color="primary" 
-              label="Create account" 
-              @click="onEmailSignUp" 
-              class="mt-6"
-            />
-            
-            <div class="text-xs text-center text-muted mt-4">
-              <p>By creating an account, you agree to our <a href="#" class="text-primary hover:underline">Terms of Service</a> and <a href="/privacy" class="text-primary hover:underline">Privacy Policy</a>.</p>
-            </div>
-          </div>
-          
-          <!-- Divider -->
-          <div class="flex items-center gap-2 my-6">
-            <div class="h-px bg-gray-200 dark:bg-gray-700 flex-1" />
-            <span class="text-dimmed text-sm">or continue with</span>
-            <div class="h-px bg-gray-200 dark:bg-gray-700 flex-1" />
-          </div>
-          
-          <!-- Google Sign In -->
+  <div class="min-h-screen bg-default text-default flex flex-col">
+    <!-- Navigation Bar -->
+    <nav class="sticky top-0 z-50 bg-default/80 backdrop-blur border-b border-default">
+      <UContainer class="py-3">
+        <div class="flex items-center justify-between">
+          <NuxtLink to="/" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <img src="~/assets/images/cursly-logo-small.png" alt="Cursly logo" class="h-6 w-auto" />
+            <span class="font-semibold text-highlighted">Cursly</span>
+          </NuxtLink>
           <UButton 
-            block
-            size="lg"
-            :loading="loadingGoogle" 
-            :loading-auto="true" 
-            color="white" 
-            variant="outline"
-            icon="i-simple-icons-google" 
-            label="Google" 
-            @click="onGoogleSignIn" 
-            class="border-gray-200 dark:border-gray-700"
+            to="/" 
+            variant="ghost" 
+            size="sm" 
+            icon="i-lucide-home"
+            label="Go Home"
+            class="text-muted hover:text-highlighted transition-colors"
           />
         </div>
+      </UContainer>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex items-center justify-center p-4">
+      <div class="w-full max-w-md space-y-8">
+        <!-- Logo and branding -->
+        <div class="flex justify-center mb-6">
+          <div class="flex flex-col items-center">
+            <img src="~/assets/images/cursly-logo-small.png" alt="Cursly logo" class="h-16 w-auto mb-2" />
+            <h1 class="text-h3 text-highlighted font-bold">Cursly</h1>
+            <p class="text-sm text-muted mt-1">Build courses in minutes</p>
+          </div>
+        </div>
+        <UCard class="border-0 shadow-lg overflow-hidden">
+          <!-- Tab navigation -->
+          <div class="flex">
+            <button 
+              class="flex-1 py-3 px-4 text-center transition-all" 
+              :class="activeTab === 'signin' ? 'text-primary font-medium' : 'text-muted hover:text-highlighted'" 
+              @click="activeTab = 'signin'"
+            >
+              Sign In
+            </button>
+            <button 
+              class="flex-1 py-3 px-4 text-center transition-all" 
+              :class="activeTab === 'signup' ? 'text-primary font-medium' : 'text-muted hover:text-highlighted'" 
+              @click="activeTab = 'signup'"
+            >
+              Create Account
+            </button>
+          </div>
+          
+          <!-- Active tab indicator -->
+          <div class="relative h-0.5 bg-gray-100 dark:bg-gray-800">
+            <div 
+              class="absolute h-0.5 bg-primary transition-all duration-300 ease-in-out" 
+              :style="{ width: '50%', left: activeTab === 'signin' ? '0' : '50%' }"
+            ></div>
+          </div>
+
+          <div class="p-6">
+            <!-- Sign In Form -->
+            <div v-if="activeTab === 'signin'" class="space-y-5">
+              <div class="space-y-4">
+                <div>
+                  <UInput 
+                    v-model="email" 
+                    type="email" 
+                    placeholder="you@example.com" 
+                    icon="i-lucide-mail" 
+                    size="lg"
+                    :color="emailError ? 'red' : undefined"
+                    @blur="validateEmail"
+                    class="auth-input"
+                  />
+                  <p v-if="emailError" class="text-xs text-red-500 mt-1 ml-1">{{ emailError }}</p>
+                </div>
+                
+                <div>
+                  <UInput 
+                    v-model="password" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    icon="i-lucide-lock" 
+                    size="lg"
+                    :color="passwordError ? 'red' : undefined"
+                    @blur="validatePassword"
+                    class="auth-input"
+                  />
+                  <p v-if="passwordError" class="text-xs text-red-500 mt-1 ml-1">{{ passwordError }}</p>
+                </div>
+              </div>
+
+              <UButton 
+                block
+                size="lg"
+                :loading="loadingSignIn" 
+                :loading-auto="true" 
+                color="primary" 
+                label="Sign in" 
+                @click="onEmailSignIn" 
+                class="mt-6"
+              />
+              
+              <div class="text-center">
+                <button class="text-sm text-primary hover:underline">Forgot password?</button>
+              </div>
+            </div>
+
+            <!-- Sign Up Form -->
+            <div v-if="activeTab === 'signup'" class="space-y-5">
+              <div class="space-y-4">
+                <div>
+                  <UInput 
+                    v-model="email" 
+                    type="email" 
+                    placeholder="you@example.com" 
+                    icon="i-lucide-mail" 
+                    size="lg"
+                    :color="emailError ? 'red' : undefined"
+                    @blur="validateEmail"
+                    class="auth-input"
+                  />
+                  <p v-if="emailError" class="text-xs text-red-500 mt-1 ml-1">{{ emailError }}</p>
+                </div>
+                
+                <div>
+                  <UInput 
+                    v-model="password" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    icon="i-lucide-lock" 
+                    size="lg"
+                    :color="passwordError ? 'red' : undefined"
+                    @blur="validatePassword"
+                    class="auth-input"
+                  />
+                  <p v-if="passwordError" class="text-xs text-red-500 mt-1 ml-1">{{ passwordError }}</p>
+                </div>
+                
+                <div>
+                  <UInput 
+                    v-model="confirmPassword" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    icon="i-lucide-shield-check" 
+                    size="lg"
+                    :color="confirmPasswordError ? 'red' : undefined"
+                    @blur="validateConfirmPassword"
+                    class="auth-input"
+                  />
+                  <p v-if="confirmPasswordError" class="text-xs text-red-500 mt-1 ml-1">{{ confirmPasswordError }}</p>
+                </div>
+              </div>
+
+              <UButton 
+                block
+                size="lg"
+                :loading="loadingSignUp" 
+                :loading-auto="true" 
+                color="primary" 
+                label="Create account" 
+                @click="onEmailSignUp" 
+                class="mt-6"
+              />
+              
+              <div class="text-xs text-center text-muted mt-4">
+                <p>By creating an account, you agree to our <a href="#" class="text-primary hover:underline">Terms of Service</a> and <a href="/privacy" class="text-primary hover:underline">Privacy Policy</a>.</p>
+              </div>
+            </div>
+            
+            <!-- Divider -->
+            <div class="flex items-center gap-2 my-6">
+              <div class="h-px bg-gray-200 dark:bg-gray-700 flex-1" />
+              <span class="text-dimmed text-sm">or continue with</span>
+              <div class="h-px bg-gray-200 dark:bg-gray-700 flex-1" />
+            </div>
+            
+            <!-- Google Sign In -->
+            <UButton 
+              block
+              size="lg"
+              :loading="loadingGoogle" 
+              :loading-auto="true" 
+              color="white" 
+              variant="outline"
+              icon="i-simple-icons-google" 
+              label="Google" 
+              @click="onGoogleSignIn" 
+              class="border-gray-200 dark:border-gray-700"
+            />
+          </div>
       </UCard>
       
       <!-- Footer -->
@@ -323,6 +344,7 @@ async function onGoogleSignIn() {
       </div>
     </div>
   </main>
+</div>
 </template>
 
 <style scoped>

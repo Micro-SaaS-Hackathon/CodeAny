@@ -21,11 +21,14 @@ For local development without Convex configured, it gracefully falls back to an 
 }
 ```
 
+> ⚠️ **Authentication required**: Application endpoints expect a Supabase access token in the `Authorization` header (`Bearer <token>`). The API derives the user ID from this token and scopes all course/module data to the authenticated teacher. Without a valid token the request is rejected with `401`.
+
 ## Course Schema
 
 ```ts
 interface Course {
   id: string
+  owner_id?: string
   title: string
   progress: number // 0-100
   created_at: string // ISO 8601

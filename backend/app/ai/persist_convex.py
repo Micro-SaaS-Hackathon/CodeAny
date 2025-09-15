@@ -53,6 +53,7 @@ async def persist_course_and_modules(
     course_payload: Dict[str, Any],
     modules: List[Dict[str, Any]],
     existing_course_id: Optional[str] = None,
+    owner_id: Optional[str] = None,
 ) -> PersistResult:
     """Persist to Convex if configured, else return in-memory placeholders.
 
@@ -62,8 +63,12 @@ async def persist_course_and_modules(
     storage_ids: Dict[str, Dict[str, Optional[str]]] = {}
     course_id: Optional[str] = None
 
-    if convex.enabled:
+    if convex.enabled and not owner_id:
+        log.warning("Convex persistence skipped: missing owner_id")
+
+    if convex.enabled and owner_id:
         log.info(f"Persist to Convex | base_url={getattr(convex, 'base_url', None)} | modules={len(modules)}")
+        course_payload = {**course_payload, "ownerId": owner_id}
         # Create initial course if not already present
         if existing_course_id:
             course_id = existing_course_id
@@ -77,7 +82,13 @@ async def persist_course_and_modules(
                 course_id = None
                 # Fallback to minimal create if detailed function missing
                 try:
-                    min_doc = await convex.mutation("courses:create", {"title": course_payload.get("title") or course_payload.get("topic") or "Untitled Course"})
+                    min_doc = await convex.mutation(
+                        "courses:create",
+                        {
+                            "title": course_payload.get("title") or course_payload.get("topic") or "Untitled Course",
+                            "ownerId": owner_id,
+                        },
+                    )
                     if isinstance(min_doc, dict):
                         course_id = min_doc.get("id") or min_doc.get("_id")
                         log.info(f"Convex create fallback ok | courseId={course_id}")
@@ -128,17 +139,21 @@ async def persist_course_and_modules(
             # Upsert module document
             try:
                 manim_code = m.get("manim_code", "")
-                await convex.mutation("modules:upsert", {
-                    "courseId": course_id,
-                    "moduleId": mid,
-                    "title": m.get("title"),
-                    "outline": m.get("outline", []),
-                    "text": m.get("text", ""),
-                    "manimCode": manim_code,
-                    "imageStorageId": storage_ids[str(mid)]["image"],
-                    "imageCaption": m.get("gemini_output", {}).get("gemini_image_caption"),
-                    "videoStorageId": storage_ids[str(mid)]["video"],
-                })
+                await convex.mutation(
+                    "modules:upsert",
+                    {
+                        "courseId": course_id,
+                        "moduleId": mid,
+                        "title": m.get("title"),
+                        "outline": m.get("outline", []),
+                        "text": m.get("text", ""),
+                        "manimCode": manim_code,
+                        "imageStorageId": storage_ids[str(mid)]["image"],
+                        "imageCaption": m.get("gemini_output", {}).get("gemini_image_caption"),
+                        "videoStorageId": storage_ids[str(mid)]["video"],
+                        "ownerId": owner_id,
+                    },
+                )
                 log.info(
                     f"Convex upsert module ok | module={mid} | manim_code_len={len(manim_code or '')}"
                 )
@@ -148,7 +163,10 @@ async def persist_course_and_modules(
         # Finalize course
         try:
             if course_id:
-                await convex.mutation("courses:finalize", {"courseId": course_id, "moduleIds": module_ids})
+                await convex.mutation(
+                    "courses:finalize",
+                    {"courseId": course_id, "moduleIds": module_ids, "ownerId": owner_id},
+                )
                 log.info(f"Convex finalize course ok | courseId={course_id} | modules={len(module_ids)}")
         except Exception:
             pass

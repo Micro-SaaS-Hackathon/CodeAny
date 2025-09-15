@@ -2,8 +2,13 @@ import { mutation, query } from "./_generated/server";
 
 export const upsert = mutation(async (ctx, args: any) => {
   const { db } = ctx;
-  const { courseId, moduleId } = args || {};
-  if (!courseId || !moduleId) return null;
+  const { courseId, moduleId, ownerId } = args || {};
+  if (!courseId || !moduleId || !ownerId) return null;
+  const course = await db
+    .query("courses")
+    .withIndex("by_owner_public_id", (q: any) => q.eq("ownerId", ownerId).eq("id", courseId))
+    .unique();
+  if (!course) return null;
   const existing = await db
     .query("modules")
     .withIndex("by_course_module", (q: any) => q.eq("courseId", courseId).eq("moduleId", String(moduleId)))
@@ -30,9 +35,14 @@ export const upsert = mutation(async (ctx, args: any) => {
   }
 });
 
-export const listByCourse = query(async (ctx, { courseId }: { courseId: string }) => {
+export const listByCourse = query(async (ctx, { courseId, ownerId }: { courseId: string; ownerId: string }) => {
   const { db } = ctx;
-  if (!courseId) return [] as any[];
+  if (!courseId || !ownerId) return [] as any[];
+  const course = await db
+    .query("courses")
+    .withIndex("by_owner_public_id", (q: any) => q.eq("ownerId", ownerId).eq("id", courseId))
+    .unique();
+  if (!course) return [] as any[];
   const docs = await db
     .query("modules")
     .withIndex("by_course", (q: any) => q.eq("courseId", courseId))
@@ -50,9 +60,14 @@ export const listByCourse = query(async (ctx, { courseId }: { courseId: string }
   }));
 });
 
-export const delete_ = mutation(async (ctx, { courseId, moduleId }: { courseId: string; moduleId: string }) => {
+export const delete_ = mutation(async (ctx, { courseId, moduleId, ownerId }: { courseId: string; moduleId: string; ownerId: string }) => {
   const { db } = ctx;
-  if (!courseId || !moduleId) return null;
+  if (!courseId || !moduleId || !ownerId) return null;
+  const course = await db
+    .query("courses")
+    .withIndex("by_owner_public_id", (q: any) => q.eq("ownerId", ownerId).eq("id", courseId))
+    .unique();
+  if (!course) return null;
   const existing = await db
     .query("modules")
     .withIndex("by_course_module", (q: any) => q.eq("courseId", courseId).eq("moduleId", String(moduleId)))

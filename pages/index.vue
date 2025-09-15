@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useToast } from '#imports'
+import { useToast, navigateTo } from '#imports'
 
 const toast = useToast()
 const isGenerating = ref(false)
@@ -8,16 +8,8 @@ const isGenerating = ref(false)
 async function onTryDemo() {
   isGenerating.value = true
   try {
-    // Simulate optimistic background generation with skeletons
-    await new Promise((r) => setTimeout(r, 900))
-    toast.add({
-      title: 'Demo launched',
-      description: 'We prefilled a Notion outline and generated a holiday-aware schedule.',
-      icon: 'i-lucide-rocket',
-      color: 'success'
-    })
-    // In a real app, navigate to demo route or external live demo
-    // navigateTo('/demo')
+    // Navigate to auth page for demo access
+    await navigateTo('/auth')
   } finally {
     isGenerating.value = false
   }
@@ -83,13 +75,7 @@ function onSubscribe() {
               size="xl"
               @click="onTryDemo"
             />
-            <UButton
-              label="See Sample Course"
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-file-text"
-              size="xl"
-            />
+
           </div>
           
           <!-- Product visual -->
@@ -97,7 +83,11 @@ function onSubscribe() {
             <div class="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-primary/20 rounded-2xl"></div>
             <UCard class="relative overflow-hidden border-0 shadow-2xl">
               <div class="bg-gradient-to-br from-primary/5 to-white dark:to-gray-900 p-6">
-                <USkeleton class="h-56 w-full rounded-xl" />
+                <img 
+                  src="~/assets/images/cursly.png" 
+                  alt="Cursly - AI Course Builder" 
+                  class="h-100 w-full object-cover rounded-xl shadow-lg"
+                />
               </div>
             </UCard>
           </div>
@@ -128,7 +118,7 @@ function onSubscribe() {
             </div>
             <div>
               <p class="font-semibold">LMS‑ready export</p>
-              <p class="text-muted text-sm">One‑click ZIP for Moodle, Canvas, Blackboard and more.</p>
+              <p class="text-muted text-sm">One‑click Export for Moodle, Canvas, Blackboard and more.</p>
             </div>
           </div>
           <div class="flex items-start gap-4">
@@ -175,7 +165,7 @@ function onSubscribe() {
               <UIcon name="i-lucide-download" class="w-5 h-5 text-primary" />
             </div>
             <p class="font-semibold">Universal Export</p>
-            <p class="text-sm text-muted mt-1">Export ZIP files compatible with Moodle, Canvas, Blackboard, and more.</p>
+            <p class="text-sm text-muted mt-1">Export Course files compatible with Moodle, Canvas, Blackboard, and more.</p>
           </div>
         </div>
       </UContainer>
@@ -217,7 +207,10 @@ function onSubscribe() {
     <footer class="mt-auto border-t border-default">
       <UContainer class="py-12 grid gap-10 md:grid-cols-3">
         <div class="flex items-start gap-3">
-          <img src="~/assets/images/cursly-logo-small.png" alt="Cursly logo" class="h-6 w-auto mt-1" />
+          <NuxtLink to="/" class="flex items-center gap-2">
+            <img src="~/assets/images/cursly-logo-small.png" alt="Cursly logo" class="h-6 w-auto" />
+            <span class="font-semibold">Cursly</span>
+          </NuxtLink>
           <div>
             <p class="font-semibold">Cursly</p>
             <p class="text-sm text-muted max-w-xs">AI course builder for educators and teams. Generate complete, LMS‑ready courses in minutes.</p>

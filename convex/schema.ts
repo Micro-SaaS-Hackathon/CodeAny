@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export default defineSchema({
   courses: defineTable({
     id: v.string(),
+    ownerId: v.optional(v.string()),
     title: v.string(),
     progress: v.number(),
     created_at: v.string(),
@@ -22,7 +23,10 @@ export default defineSchema({
     category: v.optional(v.string()),
     ageRange: v.optional(v.string()),
     language: v.optional(v.string()),
-  }).index("by_public_id", ["id"]),
+  })
+    .index("by_public_id", ["id"])
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_public_id", ["ownerId", "id"]),
 
   modules: defineTable({
     courseId: v.string(),

@@ -12,7 +12,8 @@ const router = useRouter()
 const id = ref<string>('')
 const loading = ref(true)
 const saving = ref(false)
-const { getCourse, updateCourse, listModules, upsertModule, recompileModule } = useCourses()
+const exporting = ref(false)
+const { getCourse, updateCourse, listModules, upsertModule, recompileModule, exportCourse } = useCourses()
 const toast = useToast()
 
 const course = ref<CourseDetail | null>(null)
@@ -202,6 +203,29 @@ function cancelModuleEdit() {
   moduleTarget.value = null
 }
 
+async function handleExportCourse() {
+  if (!course.value || exporting.value) return
+  exporting.value = true
+  try {
+    const { blob, filename } = await exportCourse(course.value.id)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    URL.revokeObjectURL(url)
+    toast.add({ title: 'Export ready', description: 'IMS Common Cartridge downloaded.', icon: 'i-lucide-download', color: 'green' })
+  } catch (err: any) {
+    console.error(err)
+    const message = err?.message || 'Unable to export course'
+    toast.add({ title: 'Export failed', description: message, color: 'red' })
+  } finally {
+    exporting.value = false
+  }
+}
+
 async function triggerRecompile(m: Module) {
   if (!course.value) return
   recompiling.value[m.moduleId] = true
@@ -245,6 +269,7 @@ watch(() => route.params.id, (v) => { id.value = String(v || ''); load() })
           <span class="text-xs text-toned w-8 text-right">{{ progress }}%</span>
         </div>
         <UBadge :label="course?.status || 'draft'" :color="(course?.status === 'ready' || course?.status === 'published') ? 'green' : (course?.status === 'failed' ? 'red' : 'gray')" />
+        <UButton icon="i-lucide-download" color="gray" variant="outline" :loading="exporting" :disabled="!course" @click="handleExportCourse">Export</UButton>
         <UButton icon="i-lucide-pencil" @click="openEdit" :disabled="!course">Edit</UButton>
       </div>
     </div>

@@ -192,11 +192,14 @@ Endpoints used by the Teacher Hub UI:
 - `PATCH /courses/{course_id}/modules/{module_id}` — Upserts a module (title, text, outline, etc.)
 - `GET /stats` — Returns dashboard stats with recent activity
 
+> **Auth note:** Every Teacher Hub request must include the current Supabase session token (`Authorization: Bearer <access_token>`). The backend derives the user ID from that token and only returns courses/modules owned by that teacher.
+
 Course object schema:
 
 ```json
 {
   "id": "string",
+  "owner_id": "string",
   "title": "string",
   "progress": 0,
   "created_at": "ISO 8601",

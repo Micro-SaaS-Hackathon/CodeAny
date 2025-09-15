@@ -1,4 +1,4 @@
-import { useRuntimeConfig } from '#imports'
+import { useRuntimeConfig, useSupabaseClient } from '#imports'
 import type { Course, CourseDetail, Module } from '~/types/course'
 
 const MIN_POLL_INTERVAL = 6000
@@ -34,9 +34,28 @@ function clampProgress(value: number | undefined): number {
 export function useCourses() {
   const config = useRuntimeConfig()
   const base = config.public.backendUrl
+  const supabase = useSupabaseClient()
+
+  async function getAuthHeaders() {
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (token) {
+        return { Authorization: `Bearer ${token}` }
+      }
+    } catch (err) {
+      console.warn('Failed to load Supabase session for auth headers', err)
+    }
+    return {}
+  }
+
+  async function request<T>(url: string, options: any = {}) {
+    const headers = { ...(options.headers || {}), ...(await getAuthHeaders()) }
+    return await $fetch<T>(url, { ...options, headers })
+  }
 
   async function listCourses(): Promise<Course[]> {
-    const data = await $fetch<any>(`${base}/courses`, { method: 'GET' })
+    const data = await request<any>(`${base}/courses`, { method: 'GET' })
     // Normalize to an array of Course
     if (Array.isArray(data)) return data as Course[]
     if (data && Array.isArray((data as any).items)) return (data as any).items as Course[]
@@ -44,35 +63,35 @@ export function useCourses() {
   }
 
   async function createCourse(title: string = 'Untitled Course'): Promise<Course> {
-    return await $fetch<Course>(`${base}/courses`, {
+    return await request<Course>(`${base}/courses`, {
       method: 'POST',
       body: { title }
     })
   }
 
   async function getCourse(id: string): Promise<CourseDetail> {
-    return await $fetch<CourseDetail>(`${base}/courses/${id}`, { method: 'GET' })
+    return await request<CourseDetail>(`${base}/courses/${id}`, { method: 'GET' })
   }
 
   type CourseUpdate = Partial<Pick<CourseDetail, 'title' | 'status' | 'description' | 'instructor' | 'audience' | 'level_label' | 'duration_weeks' | 'category' | 'age_range' | 'language'>>
 
   async function updateCourse(id: string, payload: CourseUpdate): Promise<CourseDetail> {
-    return await $fetch<CourseDetail>(`${base}/courses/${id}`, {
+    return await request<CourseDetail>(`${base}/courses/${id}`, {
       method: 'PATCH',
       body: payload
     })
   }
 
   async function listModules(courseId: string): Promise<Module[]> {
-    return await $fetch<Module[]>(`${base}/courses/${courseId}/modules`, { method: 'GET' })
+    return await request<Module[]>(`${base}/courses/${courseId}/modules`, { method: 'GET' })
   }
 
   async function getModule(courseId: string, moduleId: string): Promise<Module> {
-    return await $fetch<Module>(`${base}/courses/${courseId}/modules/${moduleId}`, { method: 'GET' })
+    return await request<Module>(`${base}/courses/${courseId}/modules/${moduleId}`, { method: 'GET' })
   }
 
   async function upsertModule(courseId: string, moduleId: string, payload: Partial<Module>): Promise<Module> {
-    return await $fetch<Module>(`${base}/courses/${courseId}/modules/${moduleId}`, {
+    return await request<Module>(`${base}/courses/${courseId}/modules/${moduleId}`, {
       method: 'PATCH',
       body: payload
     })
@@ -80,21 +99,53 @@ export function useCourses() {
 
   async function getConvexFileUrl(storageId: string): Promise<string | null> {
     try {
-      const data = await $fetch<{ url: string }>(`${base}/files/convex-url`, { method: 'GET', query: { storageId } })
+      const data = await request<{ url: string }>(`${base}/files/convex-url`, { method: 'GET', query: { storageId } })
       return data?.url || null
     } catch { return null }
   }
 
   async function deleteCourse(id: string): Promise<{ deleted: boolean; id: string }> {
-    return await $fetch<{ deleted: boolean; id: string }>(`${base}/courses/${id}`, { method: 'DELETE' })
+    return await request<{ deleted: boolean; id: string }>(`${base}/courses/${id}`, { method: 'DELETE' })
   }
 
   async function deleteModule(courseId: string, moduleId: string): Promise<{ deleted: boolean; courseId: string; moduleId: string }> {
-    return await $fetch<{ deleted: boolean; courseId: string; moduleId: string }>(`${base}/courses/${courseId}/modules/${moduleId}`, { method: 'DELETE' })
+    return await request<{ deleted: boolean; courseId: string; moduleId: string }>(`${base}/courses/${courseId}/modules/${moduleId}`, { method: 'DELETE' })
   }
 
   async function recompileModule(courseId: string, moduleId: string): Promise<Module> {
-    return await $fetch<Module>(`${base}/courses/${courseId}/modules/${moduleId}/recompile`, { method: 'POST' })
+    return await request<Module>(`${base}/courses/${courseId}/modules/${moduleId}/recompile`, { method: 'POST' })
+  }
+
+  async function exportCourse(id: string): Promise<{ blob: Blob; filename: string }> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${base}/courses/${id}/export`, {
+      method: 'GET',
+      credentials: 'include',
+      headers
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to export course (status ${response.status})`)
+    }
+    const blob = await response.blob()
+    const disposition = response.headers.get('Content-Disposition') || response.headers.get('content-disposition')
+    let filename = `course-${id}.imscc`
+    if (disposition) {
+      const starMatch = disposition.match(/filename\*=([^;]+)/i)
+      if (starMatch && starMatch[1]) {
+        const value = starMatch[1].replace(/^[^']*''/, '')
+        try {
+          filename = decodeURIComponent(value.replace(/"/g, ''))
+        } catch {
+          filename = value.replace(/"/g, '')
+        }
+      } else {
+        const plainMatch = disposition.match(/filename=([^;]+)/i)
+        if (plainMatch && plainMatch[1]) {
+          filename = plainMatch[1].replace(/"/g, '').trim()
+        }
+      }
+    }
+    return { blob, filename }
   }
 
   type AICourseRequest = {
@@ -115,7 +166,7 @@ export function useCourses() {
   }
 
   async function createCourseAI(payload: AICourseRequest): Promise<{ thread_id: string; course: any }> {
-    return await $fetch(`${base}/ai/build`, {
+    return await request(`${base}/ai/build`, {
       method: 'POST',
       body: payload
     }) as any
@@ -259,6 +310,7 @@ export function useCourses() {
     deleteModule,
     getConvexFileUrl,
     recompileModule,
+    exportCourse,
     isCourseInFlight,
     isCourseErrored,
     courseStatusLabel,

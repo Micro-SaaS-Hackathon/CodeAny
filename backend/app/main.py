@@ -1,9 +1,13 @@
 from __future__ import annotations
+import base64
+import json
 import os
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, HTTPException
+from urllib.parse import quote
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from .models import (
@@ -20,6 +24,7 @@ from .models import (
     ModuleUpdate,
 )
 from .convex_client import ConvexClient
+from .export_cc import build_imscc_package
 
 # Load environment from .env automatically (so MANIM_* and others are picked up)
 try:  # pragma: no cover - best-effort env loading
@@ -38,12 +43,13 @@ import asyncio
 app = FastAPI(title="Cursly Teacher Hub API", version="0.1.0")
 
 # CORS for local Nuxt dev and deployed frontends
-frontend_origins = [
-    os.getenv("FRONTEND_ORIGIN", "http://localhost:3010"),
-]
+raw_origins = os.getenv("FRONTEND_ORIGINS") or os.getenv("FRONTEND_ORIGIN")
+frontend_origins = [origin.strip() for origin in (raw_origins.split(",") if raw_origins else []) if origin.strip()]
+if not frontend_origins:
+    frontend_origins = ["http://localhost:3010"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=frontend_origins + ["*"],
+    allow_origins=frontend_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,63 +59,146 @@ convex = ConvexClient()
 log = get_logger("api")
 
 # --- In-memory fallback (for local dev without Convex) ---
-_memory_courses: List[Course] = []
+_memory_courses: Dict[str, Course] = {}
 _threads: Dict[str, Dict[str, Any]] = {}
 _memory_modules: Dict[str, List[Module]] = {}
 _memory_course_meta: Dict[str, Dict[str, Any]] = {}
+_memory_course_owner: Dict[str, str] = {}
 
 
-def _fallback_list_courses() -> List[Course]:
-    return _memory_courses
+def _decode_user_id_from_token(token: str) -> Optional[str]:
+    try:
+        parts = token.split('.')
+        if len(parts) < 2:
+            return None
+        payload = parts[1]
+        padding = '=' * (-len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload + padding).decode('utf-8'))
+        return data.get('sub') or data.get('user_id') or data.get('aud')
+    except Exception:
+        return None
 
 
-def _fallback_create_course(title: str) -> Course:
+async def require_user_id(request: Request) -> str:
+    auth = request.headers.get('Authorization') or request.headers.get('authorization')
+    if auth and auth.lower().startswith('bearer '):
+        token = auth.split(' ', 1)[1].strip()
+        user_id = _decode_user_id_from_token(token)
+        if user_id:
+            return user_id
+    user_id = request.headers.get('x-user-id') or request.headers.get('x-userid')
+    if user_id:
+        return user_id
+    raise HTTPException(status_code=401, detail='Missing user identity')
+
+
+def _fallback_list_courses(owner_id: str) -> List[Course]:
+    return [course for cid, course in _memory_courses.items() if _memory_course_owner.get(cid) == owner_id]
+
+
+def _fallback_create_course(title: str, owner_id: str) -> Course:
     now = now_iso()
     course = Course(
         id=str(uuid4()),
+        owner_id=owner_id,
         title=title or "Untitled Course",
         progress=0,
         created_at=now,
         updated_at=now,
         status="draft",
     )
-    _memory_courses.append(course)
+    _memory_courses[course.id] = course
     _memory_course_meta[course.id] = {}
+    _memory_course_owner[course.id] = owner_id
     return course
 
 
-def _fallback_stats() -> Stats:
-    total = len(_memory_courses)
+def _fallback_stats(owner_id: str) -> Stats:
+    owned = _fallback_list_courses(owner_id)
+    total = len(owned)
     activities = [
-        Activity(course_id=c.id, event="created", timestamp=c.created_at) for c in _memory_courses[-5:]
+        Activity(course_id=c.id, event="created", timestamp=c.created_at) for c in owned[-5:]
     ]
     return Stats(total_courses=total, active_teachers=1 if total else 0, recent_activity=activities)
 
 
-def _fallback_get_course(course_id: str) -> Optional[CourseDetail]:
-    for c in _memory_courses:
-        if c.id == course_id:
-            mods = _memory_modules.get(course_id, [])
-            meta = _memory_course_meta.get(course_id, {})
-            # Provide default None for detail fields not tracked in memory
-            return CourseDetail(
-                id=c.id,
-                title=c.title,
-                progress=c.progress,
-                created_at=c.created_at,
-                updated_at=c.updated_at,
-                status=c.status,
-                description=meta.get("description"),
-                instructor=meta.get("instructor"),
-                audience=meta.get("audience"),
-                level_label=meta.get("level_label"),
-                duration_weeks=meta.get("duration_weeks"),
-                category=meta.get("category"),
-                age_range=meta.get("age_range"),
-                language=meta.get("language"),
+def _fallback_get_course(course_id: str, owner_id: str) -> Optional[CourseDetail]:
+    course = _memory_courses.get(course_id)
+    if not course or _memory_course_owner.get(course_id) != owner_id:
+        return None
+    mods = _memory_modules.get(course_id, [])
+    meta = _memory_course_meta.get(course_id, {})
+    return CourseDetail(
+        id=course.id,
+        owner_id=owner_id,
+        title=course.title,
+        progress=course.progress,
+        created_at=course.created_at,
+        updated_at=course.updated_at,
+        status=course.status,
+        description=meta.get("description"),
+        instructor=meta.get("instructor"),
+        audience=meta.get("audience"),
+        level_label=meta.get("level_label"),
+        duration_weeks=meta.get("duration_weeks"),
+        category=meta.get("category"),
+        age_range=meta.get("age_range"),
+        language=meta.get("language"),
+        modules=mods,
+    )
+
+
+async def _fetch_modules(course_id: str, owner_id: str) -> List[Module]:
+    if convex.enabled:
+        try:
+            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id, "ownerId": owner_id})
+            items: List[Module] = []
+            if isinstance(mods_raw, list):
+                for m in mods_raw:
+                    if isinstance(m, dict):
+                        items.append(Module(**m))
+            return items
+        except Exception as e:
+            log.warning(f"Convex list_modules error | err={e}")
+    if _memory_course_owner.get(course_id) != owner_id:
+        return []
+    return _memory_modules.get(course_id, [])
+
+
+async def _fetch_course_detail(course_id: str, owner_id: str) -> CourseDetail:
+    if convex.enabled:
+        try:
+            data = await convex.query("courses:get", {"id": course_id, "ownerId": owner_id})
+            if not data:
+                raise HTTPException(status_code=404, detail="Course not found")
+            mods = await _fetch_modules(course_id, owner_id)
+            detail = CourseDetail(
+                id=data.get("id"),
+                owner_id=owner_id,
+                title=data.get("title"),
+                progress=data.get("progress", 0),
+                created_at=data.get("created_at") or now_iso(),
+                updated_at=data.get("updated_at") or now_iso(),
+                status=data.get("status", "draft"),
+                description=data.get("description"),
+                instructor=data.get("instructor"),
+                audience=data.get("audience"),
+                level_label=data.get("levelLabel"),
+                duration_weeks=data.get("durationWeeks"),
+                category=data.get("category"),
+                age_range=data.get("ageRange"),
+                language=data.get("language"),
                 modules=mods,
             )
-    return None
+            return detail
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.warning(f"Convex get_course_detail error | err={e}")
+    detail = _fallback_get_course(course_id, owner_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return detail
 
 
 @app.get("/health")
@@ -157,12 +246,16 @@ async def convex_diagnostics():
 
 
 @app.get("/courses", response_model=List[Course])
-async def get_courses():
+async def get_courses(user_id: str = Depends(require_user_id)):
     if convex.enabled:
         try:
+            try:
+                await convex.mutation("courses:adoptOrphans", {"ownerId": user_id})
+            except Exception as adopt_err:
+                log.info(f"adoptOrphans skip | err={adopt_err}")
             log.info(f"Convex list start | base_url={getattr(convex, 'base_url', None)}")
             # expects Convex function name "courses:list"
-            data = await convex.query("courses:list", {})
+            data = await convex.query("courses:list", {"ownerId": user_id})
             # Unwrap various response shapes to a list of dicts
             items: List[Dict[str, Any]] = []
             if isinstance(data, list):
@@ -175,76 +268,46 @@ async def get_courses():
                         break
             log.info(f"Convex list ok | count={len(items)}")
             # ensure each item matches Course fields
-            return [Course(**item) for item in items]
+            normalized: List[Course] = []
+            for item in items:
+                payload = dict(item)
+                payload.setdefault("owner_id", payload.get("ownerId") or user_id)
+                payload.pop("ownerId", None)
+                normalized.append(Course(**payload))
+            return normalized
         except Exception as e:
             # fall back if Convex missing
             log.warning(f"Convex get_courses error | base_url={getattr(convex, 'base_url', None)} | err={e}")
-    return _fallback_list_courses()
+    return _fallback_list_courses(user_id)
 
 
 @app.post("/courses", response_model=Course)
-async def create_course(payload: CourseCreate):
+async def create_course(payload: CourseCreate, user_id: str = Depends(require_user_id)):
     title = payload.title or "Untitled Course"
     if convex.enabled:
         try:
             log.info(f"Convex create start | title={title}")
-            data = await convex.mutation("courses:create", {"title": title})
+            data = await convex.mutation("courses:create", {"title": title, "ownerId": user_id})
             log.info("Convex create ok")
-            return Course(**data)
+            payload = dict(data)
+            payload.setdefault("owner_id", payload.get("ownerId") or user_id)
+            payload.pop("ownerId", None)
+            return Course(**payload)
         except Exception as e:
             log.warning(f"Convex create_course error | err={e}")
-    return _fallback_create_course(title)
+    return _fallback_create_course(title, user_id)
 
 
 @app.get("/courses/{course_id}", response_model=CourseDetail)
-async def get_course_detail(course_id: str):
-    if convex.enabled:
-        try:
-            data = await convex.query("courses:get", {"id": course_id})
-            if not data:
-                raise HTTPException(status_code=404, detail="Course not found")
-            # Fetch modules
-            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
-            mods: List[Module] = []
-            if isinstance(mods_raw, list):
-                for m in mods_raw:
-                    if isinstance(m, dict):
-                        mods.append(Module(**m))
-            # Map fields and normalize names
-            detail = CourseDetail(
-                id=data.get("id"),
-                title=data.get("title"),
-                progress=data.get("progress", 0),
-                created_at=data.get("created_at") or now_iso(),
-                updated_at=data.get("updated_at") or now_iso(),
-                status=data.get("status", "draft"),
-                description=data.get("description"),
-                instructor=data.get("instructor"),
-                audience=data.get("audience"),
-                level_label=data.get("levelLabel"),
-                duration_weeks=data.get("durationWeeks"),
-                category=data.get("category"),
-                age_range=data.get("ageRange"),
-                language=data.get("language"),
-                modules=mods,
-            )
-            return detail
-        except HTTPException:
-            raise
-        except Exception as e:
-            log.warning(f"Convex get_course_detail error | err={e}")
-    # fallback
-    detail = _fallback_get_course(course_id)
-    if detail is None:
-        raise HTTPException(status_code=404, detail="Course not found")
-    return detail
+async def get_course_detail(course_id: str, user_id: str = Depends(require_user_id)):
+    return await _fetch_course_detail(course_id, user_id)
 
 
 @app.patch("/courses/{course_id}", response_model=CourseDetail)
-async def update_course(course_id: str, payload: CourseUpdate):
+async def update_course(course_id: str, payload: CourseUpdate, user_id: str = Depends(require_user_id)):
     if convex.enabled:
         try:
-            args: Dict[str, Any] = {"courseId": course_id}
+            args: Dict[str, Any] = {"courseId": course_id, "ownerId": user_id}
             # Map snake_case to Convex camelCase for detail fields
             if payload.title is not None:
                 args["title"] = payload.title
@@ -268,26 +331,23 @@ async def update_course(course_id: str, payload: CourseUpdate):
                 args["language"] = payload.language
             await convex.mutation("courses:updateBasic", args)
             # return fresh detail
-            return await get_course_detail(course_id)
+            return await _fetch_course_detail(course_id, user_id)
         except Exception as e:
             log.warning(f"Convex update_course error | err={e}")
     # fallback memory update
-    found = False
-    for i, c in enumerate(_memory_courses):
-        if c.id == course_id:
-            updated = Course(
-                id=c.id,
-                title=payload.title or c.title,
-                progress=c.progress,
-                created_at=c.created_at,
-                updated_at=now_iso(),
-                status=payload.status or c.status,
-            )
-            _memory_courses[i] = updated
-            found = True
-            break
-    if not found:
+    existing = _memory_courses.get(course_id)
+    if not existing or _memory_course_owner.get(course_id) != user_id:
         raise HTTPException(status_code=404, detail="Course not found")
+    updated = Course(
+        id=existing.id,
+        owner_id=user_id,
+        title=payload.title or existing.title,
+        progress=existing.progress,
+        created_at=existing.created_at,
+        updated_at=now_iso(),
+        status=payload.status or existing.status,
+    )
+    _memory_courses[course_id] = updated
     # update meta
     meta = _memory_course_meta.setdefault(course_id, {})
     for k in [
@@ -304,70 +364,64 @@ async def update_course(course_id: str, payload: CourseUpdate):
         if v is not None:
             meta[k] = v
     _memory_course_meta[course_id] = meta
-    return _fallback_get_course(course_id)
+    return _fallback_get_course(course_id, user_id)
+
+
+@app.get("/courses/{course_id}/export")
+async def export_course_cc(course_id: str, user_id: str = Depends(require_user_id)):
+    detail = await _fetch_course_detail(course_id, user_id)
+    package_bytes, filename = build_imscc_package(detail)
+    payload = BytesIO(package_bytes)
+    disposition = f"attachment; filename*=UTF-8''{quote(filename)}"
+    return StreamingResponse(
+        payload,
+        media_type="application/vnd.ims.imsccv1p3+imscc",
+        headers={"Content-Disposition": disposition},
+    )
 
 
 @app.delete("/courses/{course_id}")
-async def delete_course(course_id: str):
+async def delete_course(course_id: str, user_id: str = Depends(require_user_id)):
     if convex.enabled:
         try:
-            result = await convex.mutation("courses:delete_", {"courseId": course_id})
+            result = await convex.mutation("courses:delete_", {"courseId": course_id, "ownerId": user_id})
             if not result:
                 raise HTTPException(status_code=404, detail="Course not found")
             return {"deleted": True, "id": course_id}
         except Exception as e:
             log.warning(f"Convex delete_course error | err={e}")
     # fallback memory delete
-    for i, c in enumerate(_memory_courses):
-        if c.id == course_id:
-            _memory_courses.pop(i)
-            # Clean up modules and meta
-            _memory_modules.pop(course_id, None)
-            _memory_course_meta.pop(course_id, None)
-            return {"deleted": True, "id": course_id}
+    if _memory_course_owner.get(course_id) == user_id and course_id in _memory_courses:
+        _memory_courses.pop(course_id, None)
+        _memory_course_owner.pop(course_id, None)
+        # Clean up modules and meta
+        _memory_modules.pop(course_id, None)
+        _memory_course_meta.pop(course_id, None)
+        return {"deleted": True, "id": course_id}
     raise HTTPException(status_code=404, detail="Course not found")
 
 
 @app.get("/courses/{course_id}/modules", response_model=List[Module])
-async def list_modules(course_id: str):
-    if convex.enabled:
-        try:
-            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
-            items: List[Module] = []
-            if isinstance(mods_raw, list):
-                for m in mods_raw:
-                    if isinstance(m, dict):
-                        items.append(Module(**m))
-            return items
-        except Exception as e:
-            log.warning(f"Convex list_modules error | err={e}")
-    return _memory_modules.get(course_id, [])
+async def list_modules(course_id: str, user_id: str = Depends(require_user_id)):
+    detail = await _fetch_course_detail(course_id, user_id)
+    return detail.modules
 
 
 @app.get("/courses/{course_id}/modules/{module_id}", response_model=Module)
-async def get_module(course_id: str, module_id: str):
-    if convex.enabled:
-        try:
-            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
-            if isinstance(mods_raw, list):
-                for m in mods_raw:
-                    if isinstance(m, dict) and str(m.get("moduleId")) == str(module_id):
-                        return Module(**m)
-        except Exception as e:
-            log.warning(f"Convex get_module error | err={e}")
-    # fallback
-    mods = _memory_modules.get(course_id, [])
-    for m in mods:
-        if m.moduleId == str(module_id):
+async def get_module(course_id: str, module_id: str, user_id: str = Depends(require_user_id)):
+    detail = await _fetch_course_detail(course_id, user_id)
+    for m in detail.modules:
+        if str(m.moduleId) == str(module_id):
             return m
     raise HTTPException(status_code=404, detail="Module not found")
 
 
 @app.patch("/courses/{course_id}/modules/{module_id}", response_model=Module)
-async def upsert_module(course_id: str, module_id: str, payload: ModuleUpdate):
+async def upsert_module(course_id: str, module_id: str, payload: ModuleUpdate, user_id: str = Depends(require_user_id)):
+    await _fetch_course_detail(course_id, user_id)
     if convex.enabled:
         try:
-            args: Dict[str, Any] = {"courseId": course_id, "moduleId": module_id}
+            args: Dict[str, Any] = {"courseId": course_id, "moduleId": module_id, "ownerId": user_id}
             for k in (
                 "title",
                 "outline",
@@ -382,15 +436,17 @@ async def upsert_module(course_id: str, module_id: str, payload: ModuleUpdate):
                     args[k] = v
             await convex.mutation("modules:upsert", args)
             # Return the current module by refetching list and filtering
-            mods = await list_modules(course_id)
+            mods = await _fetch_modules(course_id, user_id)
             for m in mods:
-                if m.moduleId == module_id:
+                if str(m.moduleId) == str(module_id):
                     return m
             # If not found in list, construct from payload
             return Module(courseId=course_id, moduleId=module_id, **payload.model_dump(exclude_none=True))
         except Exception as e:
             log.warning(f"Convex upsert_module error | err={e}")
     # fallback in-memory upsert
+    if _memory_course_owner.get(course_id) != user_id:
+        raise HTTPException(status_code=404, detail="Course not found")
     mods = _memory_modules.setdefault(course_id, [])
     existing = None
     for i, m in enumerate(mods):
@@ -410,16 +466,19 @@ async def upsert_module(course_id: str, module_id: str, payload: ModuleUpdate):
 
 
 @app.delete("/courses/{course_id}/modules/{module_id}")
-async def delete_module(course_id: str, module_id: str):
+async def delete_module(course_id: str, module_id: str, user_id: str = Depends(require_user_id)):
+    await _fetch_course_detail(course_id, user_id)
     if convex.enabled:
         try:
-            result = await convex.mutation("modules:delete_", {"courseId": course_id, "moduleId": module_id})
+            result = await convex.mutation("modules:delete_", {"courseId": course_id, "moduleId": module_id, "ownerId": user_id})
             if not result:
                 raise HTTPException(status_code=404, detail="Module not found")
             return {"deleted": True, "courseId": course_id, "moduleId": module_id}
         except Exception as e:
             log.warning(f"Convex delete_module error | err={e}")
     # fallback memory delete
+    if _memory_course_owner.get(course_id) != user_id:
+        raise HTTPException(status_code=404, detail="Course not found")
     mods = _memory_modules.get(course_id, [])
     for i, m in enumerate(mods):
         if m.moduleId == module_id:
@@ -430,7 +489,8 @@ async def delete_module(course_id: str, module_id: str):
 
 
 @app.post("/courses/{course_id}/modules/{module_id}/recompile", response_model=Module)
-async def recompile_module(course_id: str, module_id: str):
+async def recompile_module(course_id: str, module_id: str, user_id: str = Depends(require_user_id)):
+    await _fetch_course_detail(course_id, user_id)
     # Resolve current module + manim code
     manim_code: str = ""
     module_title: str = f"Module {module_id}"
@@ -438,7 +498,7 @@ async def recompile_module(course_id: str, module_id: str):
 
     if convex.enabled:
         try:
-            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
+            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id, "ownerId": user_id})
             if isinstance(mods_raw, list):
                 for m in mods_raw:
                     if isinstance(m, dict) and str(m.get("moduleId")) == str(module_id):
@@ -450,6 +510,8 @@ async def recompile_module(course_id: str, module_id: str):
             log.warning(f"Convex fetch module for recompile failed | err={e}")
     else:
         # memory fallback
+        if _memory_course_owner.get(course_id) != user_id:
+            raise HTTPException(status_code=404, detail="Course not found")
         mods = _memory_modules.get(course_id, [])
         for m in mods:
             if m.moduleId == str(module_id):
@@ -484,9 +546,10 @@ async def recompile_module(course_id: str, module_id: str):
                 "courseId": course_id,
                 "moduleId": module_id,
                 "videoStorageId": storage_id,
+                "ownerId": user_id,
             })
             # refetch
-            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id})
+            mods_raw = await convex.query("modules:listByCourse", {"courseId": course_id, "ownerId": user_id})
             if isinstance(mods_raw, list):
                 for m in mods_raw:
                     if isinstance(m, dict) and str(m.get("moduleId")) == str(module_id):
@@ -497,6 +560,8 @@ async def recompile_module(course_id: str, module_id: str):
             raise HTTPException(status_code=500, detail="Upload failed")
     else:
         # Update memory only; no hosting available
+        if _memory_course_owner.get(course_id) != user_id:
+            raise HTTPException(status_code=404, detail="Course not found")
         mods = _memory_modules.setdefault(course_id, [])
         for i, m in enumerate(mods):
             if m.moduleId == str(module_id):
@@ -509,11 +574,11 @@ async def recompile_module(course_id: str, module_id: str):
 
 
 @app.get("/stats", response_model=Stats)
-async def get_stats():
+async def get_stats(user_id: str = Depends(require_user_id)):
     if convex.enabled:
         try:
             log.info("Convex stats start")
-            data = await convex.query("stats:get", {})
+            data = await convex.query("stats:get", {"ownerId": user_id})
             # Ensure shape matches expected schema
             if not isinstance(data, dict):
                 raise ValueError("Invalid stats shape")
@@ -525,7 +590,7 @@ async def get_stats():
             log.warning(f"Convex stats error | err={e}")
             # compute from Convex courses as a backup
             try:
-                courses_raw = await convex.query("courses:list", {})
+                courses_raw = await convex.query("courses:list", {"ownerId": user_id})
                 courses_list = courses_raw if isinstance(courses_raw, list) else []
                 total = len(courses_list)
                 recent = courses_list[-5:] if total else []
@@ -537,49 +602,55 @@ async def get_stats():
                 return Stats(total_courses=total, active_teachers=1 if total else 0, recent_activity=activities)
             except Exception:
                 pass
-    return _fallback_stats()
+    return _fallback_stats(user_id)
 
 
 # --- AI endpoints ---
 
-def _create_memory_ai_course_doc(payload: AICourseRequest) -> Course:
+def _create_memory_ai_course_doc(payload: AICourseRequest, owner_id: str) -> Course:
     now = now_iso()
     course = Course(
         id=str(uuid4()),
+        owner_id=owner_id,
         title=payload.title or payload.topic,
         progress=0,
         created_at=now,
         updated_at=now,
         status="creating",
     )
-    _memory_courses.append(course)
+    _memory_courses[course.id] = course
+    _memory_course_owner[course.id] = owner_id
+    _memory_course_meta.setdefault(course.id, {})
     return course
 
 
-async def _update_progress(target_id: Optional[str], status: str, progress: int):
+async def _update_progress(owner_id: Optional[str], target_id: Optional[str], status: str, progress: int):
     # Update Convex if configured
-    if convex.enabled and target_id:
+    if convex.enabled and target_id and owner_id:
         try:
             log.info(f"Convex updateProgress | courseId={target_id} | status={status} | progress={progress}")
-            await convex.mutation("courses:updateProgress", {"courseId": target_id, "status": status, "progress": progress})
+            await convex.mutation(
+                "courses:updateProgress",
+                {"courseId": target_id, "status": status, "progress": progress, "ownerId": owner_id},
+            )
         except Exception:
             pass
     # Also update in-memory if present
-    for i, c in enumerate(_memory_courses):
-        if target_id and c.id == target_id:
-            _memory_courses[i] = Course(
-                id=c.id,
-                title=c.title,
-                progress=progress,
-                created_at=c.created_at,
-                updated_at=now_iso(),
-                status=status if status else c.status,
-            )
-            break
+    if target_id and target_id in _memory_courses:
+        existing = _memory_courses[target_id]
+        _memory_courses[target_id] = Course(
+            id=existing.id,
+            owner_id=existing.owner_id,
+            title=existing.title,
+            progress=progress,
+            created_at=existing.created_at,
+            updated_at=now_iso(),
+            status=status if status else existing.status,
+        )
 
 
 @app.post("/ai/build", response_model=AICourseResponse)
-async def ai_build(payload: AICourseRequest):
+async def ai_build(payload: AICourseRequest, user_id: str = Depends(require_user_id)):
     thread_id = str(uuid4())
     log.info(f"/ai/build start | thread={thread_id} | topic={payload.topic} | level={payload.level} | title={payload.title}")
 
@@ -621,6 +692,7 @@ async def ai_build(payload: AICourseRequest):
                 "language": payload.language,
                 "status": "creating",
                 "progress": 0,
+                "ownerId": user_id,
             })
             if isinstance(doc, dict):
                 course_id = doc.get("id") or doc.get("_id")
@@ -629,7 +701,7 @@ async def ai_build(payload: AICourseRequest):
             course_id = None
             # Fallback to minimal create if detailed function is not available
             try:
-                min_doc = await convex.mutation("courses:create", {"title": payload.title or payload.topic})
+                min_doc = await convex.mutation("courses:create", {"title": payload.title or payload.topic, "ownerId": user_id})
                 if isinstance(min_doc, dict):
                     course_id = min_doc.get("id") or min_doc.get("_id")
                     log.info(f"Convex pre-create fallback ok | courseId={course_id}")
@@ -637,14 +709,14 @@ async def ai_build(payload: AICourseRequest):
                 course_id = None
 
     # Create memory record mirroring the course
-    mem_course = _create_memory_ai_course_doc(payload)
+    mem_course = _create_memory_ai_course_doc(payload, user_id)
     # Map thread to course tracking
-    _threads[thread_id] = {"course_id": course_id or mem_course.id, "progress": 0, "status": "creating"}
+    _threads[thread_id] = {"course_id": course_id or mem_course.id, "progress": 0, "status": "creating", "owner_id": user_id}
 
     async def progress_cb(pct: int, status: str):
         _threads[thread_id]["progress"] = pct
         _threads[thread_id]["status"] = status
-        await _update_progress(course_id or mem_course.id, status, pct)
+        await _update_progress(user_id, course_id or mem_course.id, status, pct)
         log.info(f"progress | thread={thread_id} | status={status} | {pct}%")
 
     # Run build (synchronous for now)
@@ -654,16 +726,17 @@ async def ai_build(payload: AICourseRequest):
             level=payload.level,
             constraints=constraints,
             convex=convex,
+            owner_id=user_id,
             progress_cb=progress_cb,
             existing_course_id=course_id,
         )
         _threads[thread_id]["course"] = course_package
         # Final status
-        await _update_progress(course_id or mem_course.id, "ready", 100)
+        await _update_progress(user_id, course_id or mem_course.id, "ready", 100)
         log.info(f"/ai/build done | thread={thread_id} | status=ready")
     except Exception as e:
         _threads[thread_id]["error"] = str(e)
-        await _update_progress(course_id or mem_course.id, "failed", 100)
+        await _update_progress(user_id, course_id or mem_course.id, "failed", 100)
         log.error(f"/ai/build failed | thread={thread_id} | err={e}")
         raise HTTPException(status_code=500, detail=f"Build failed: {e}")
 
@@ -671,21 +744,27 @@ async def ai_build(payload: AICourseRequest):
 
 
 @app.get("/ai/stream")
-async def ai_stream(thread_id: str):
+async def ai_stream(thread_id: str, user_id: str = Depends(require_user_id)):
+    info = _threads.get(thread_id)
+    if not info or info.get("owner_id") not in (None, user_id):
+        raise HTTPException(status_code=404, detail="Thread not found")
+
     async def event_gen():
         # Simple polling loop for this thread; in real use you'd push updates
         import asyncio as _asyncio
         for _ in range(100):
-            info = _threads.get(thread_id) or {}
-            yield f"data: {info}\n\n"
-            if (info.get("status") == "ready") or (info.get("status") == "failed"):
+            state = _threads.get(thread_id) or {}
+            if state.get("owner_id") not in (None, user_id):
+                break
+            yield f"data: {state}\n\n"
+            if (state.get("status") == "ready") or (state.get("status") == "failed"):
                 break
             await _asyncio.sleep(1)
     return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
 @app.get("/files/convex-url")
-async def get_convex_file_url(storageId: str):
+async def get_convex_file_url(storageId: str, user_id: str = Depends(require_user_id)):
     if not storageId:
         raise HTTPException(status_code=400, detail="storageId required")
     if convex.enabled:

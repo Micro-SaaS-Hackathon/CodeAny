@@ -7,6 +7,7 @@ CourseStatus = Literal['draft', 'published', str]
 
 class Course(BaseModel):
     id: str
+    owner_id: Optional[str] = None
     title: str
     progress: int = Field(ge=0, le=100)
     created_at: str

@@ -4,8 +4,18 @@ function parseDate(s?: string) {
   return s ? Date.parse(s) : 0;
 }
 
-export const get = query(async ({ db }) => {
-  const courses: any[] = await db.query("courses").collect();
+export const get = query(async ({ db }, { ownerId }: { ownerId: string }) => {
+  if (!ownerId) {
+    return {
+      total_courses: 0,
+      active_teachers: 0,
+      recent_activity: [],
+    };
+  }
+  const courses: any[] = await db
+    .query("courses")
+    .withIndex("by_owner", (q: any) => q.eq("ownerId", ownerId))
+    .collect();
   const total = courses.length;
   const sorted = [...courses].sort((a, b) => parseDate(a.updated_at) - parseDate(b.updated_at));
   const recent = sorted.slice(-5);
