@@ -300,7 +300,16 @@ async def build_course_graph(
         "progress": 80,
     }
 
-    pr = await persist_course_and_modules(convex=convex, course_payload=course_payload, modules=modules_list, existing_course_id=existing_course_id)
+    if owner_id:
+        course_payload["ownerId"] = owner_id
+
+    pr = await persist_course_and_modules(
+        convex=convex,
+        course_payload=course_payload,
+        modules=modules_list,
+        existing_course_id=existing_course_id,
+        owner_id=owner_id,
+    )
     report(95, "uploading")
 
     # Final package

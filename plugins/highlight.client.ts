@@ -10,6 +10,8 @@ import xml from 'highlight.js/lib/languages/xml';
 import json from 'highlight.js/lib/languages/json';
 import bash from 'highlight.js/lib/languages/bash';
 import sql from 'highlight.js/lib/languages/sql';
+import cpp from 'highlight.js/lib/languages/cpp';
+import plaintext from 'highlight.js/lib/languages/plaintext';
 
 // Register languages
 hljs.registerLanguage('javascript', javascript);
@@ -25,6 +27,10 @@ hljs.registerLanguage('json', json);
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('shell', bash);
 hljs.registerLanguage('sql', sql);
+hljs.registerLanguage('cpp', cpp);
+hljs.registerLanguage('c++', cpp);
+hljs.registerLanguage('plaintext', plaintext);
+hljs.registerLanguage('text', plaintext);
 
 // Make hljs globally available
 export default defineNuxtPlugin(() => {
